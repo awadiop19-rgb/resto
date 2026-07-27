@@ -1,0 +1,154 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  SERVEUR
+  CUISINE
+  CAISSIER
+}
+
+enum OrderStatus {
+  EN_ATTENTE
+  EN_PREPARATION
+  PRETE
+  SERVIE
+  ANNULEE
+}
+
+enum OrderSource {
+  INTERNE
+  EN_LIGNE
+}
+
+enum PaymentMethod {
+  CASH
+  WAVE
+}
+
+enum CashRegisterStatus {
+  OUVERTE
+  FERMEE
+}
+
+model User {
+  id                     String         @id @default(cuid())
+  name                   String
+  email                  String         @unique
+  password               String
+  role                   Role           @default(SERVEUR)
+  active                 Boolean        @default(true)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  orders                 Order[]
+  expenses               Expense[]
+  payments               Payment[]
+  cashRegisters          CashRegister[] @relation("CashRegisterCashier")
+  correctedCashRegisters CashRegister[] @relation("CashRegisterCorrector")
+}
+
+model MenuCategory {
+  id    String     @id @default(cuid())
+  name  String     @unique
+  items MenuItem[]
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  price       Float
+  available   Boolean      @default(true)
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  tableNumber   Int?
+  status        OrderStatus @default(EN_ATTENTE)
+  source        OrderSource @default(INTERNE)
+  customerName  String?
+  customerPhone String?
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id])
+  items         OrderItem[]
+  payment       Payment?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int      @default(1)
+  unitPrice  Float
+  note       String?
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  label     String
+  amount    Float
+  category  String
+  date      DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// Session de caisse ouverte par un caissier pour sa journée de travail.
+// Sa fermeture constitue le versement (remise des espèces à la comptabilité).
+model CashRegister {
+  id        String              @id @default(cuid())
+  cashierId String
+  cashier   User                @relation("CashRegisterCashier", fields: [cashierId], references: [id])
+  status    CashRegisterStatus  @default(OUVERTE)
+  openedAt  DateTime            @default(now())
+  closedAt  DateTime?
+
+  openingFloat   Float  @default(0) // fond de caisse au démarrage
+  totalCash      Float? // total encaissé en espèces (calculé à la fermeture)
+  totalWave      Float? // total encaissé via Wave (calculé à la fermeture)
+  declaredAmount Float? // montant en espèces déclaré par le caissier pour versement
+  note           String?
+
+  // Correction éventuelle par la comptabilité (l'historique original reste inchangé ci-dessus)
+  correctedAmount Float?
+  correctionNote  String?
+  correctedById   String?
+  correctedBy     User?     @relation("CashRegisterCorrector", fields: [correctedById], references: [id])
+  correctedAt     DateTime?
+
+  payments  Payment[]
+  createdAt DateTime  @default(now())
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  order          Order         @relation(fields: [orderId], references: [id])
+  amount         Float
+  method         PaymentMethod
+  cashierId      String
+  cashier        User          @relation(fields: [cashierId], references: [id])
+  cashRegisterId String
+  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  createdAt      DateTime      @default(now())
+}
