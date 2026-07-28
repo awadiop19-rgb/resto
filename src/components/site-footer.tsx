@@ -13,12 +13,12 @@ export function SiteFooter() {
         </div>
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Adresse</p>
-          <p className="mt-2 text-sm">Route de la Corniche Ouest, Dakar, Sénégal</p>
+          <p className="mt-2 text-sm">Rufisque, Sénégal</p>
           <p className="mt-1 text-sm">Ouvert tous les jours · 11h00 – 23h00</p>
         </div>
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Contact</p>
-          <p className="mt-2 text-sm">+221 77 000 00 00</p>
+          <p className="mt-2 text-sm">+221 71 150 81 22</p>
           <p className="mt-1 text-sm">contact@saveuramir.sn</p>
         </div>
       </div>
