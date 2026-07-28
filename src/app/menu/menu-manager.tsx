@@ -132,6 +132,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
             )}
           </div>
 
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-slate-400">
@@ -223,6 +224,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
               ))}
             </tbody>
           </table>
+          </div>
 
           {isAdmin && (
             <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">

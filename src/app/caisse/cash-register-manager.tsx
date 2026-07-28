@@ -175,6 +175,7 @@ export function CashRegisterManager({
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="mb-3 font-semibold">Commandes en attente de paiement</h2>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-slate-400">
@@ -230,6 +231,7 @@ export function CashRegisterManager({
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

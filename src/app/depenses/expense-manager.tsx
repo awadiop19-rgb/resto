@@ -124,6 +124,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
             )}
           </div>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-slate-400">
@@ -162,6 +163,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

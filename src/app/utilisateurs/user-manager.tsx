@@ -254,6 +254,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
             </select>
           </div>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-slate-400">
@@ -418,6 +419,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

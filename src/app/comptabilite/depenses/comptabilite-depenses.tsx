@@ -113,6 +113,7 @@ export function ComptabiliteDepenses({
             )}
           </div>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase text-slate-400">
@@ -142,6 +143,7 @@ export function ComptabiliteDepenses({
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
