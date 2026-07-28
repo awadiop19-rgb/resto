@@ -53,7 +53,7 @@ export function OrderBoard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const canCreate = role === "ADMIN" || role === "SERVEUR";
+  const canCreate = role === "ADMIN" || role === "SERVEUR" || role === "CAISSIER";
   const canDelete = role === "ADMIN";
 
   const allItems = categories.flatMap((c) => c.items);

@@ -24,6 +24,7 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
   ],
   CAISSIER: [
     { href: "/caisse", label: "Caisse" },
+    { href: "/commandes", label: "Commandes" },
     { href: "/profil", label: "Mon profil" },
   ],
 };
