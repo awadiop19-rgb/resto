@@ -3,6 +3,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PublicOrderForm } from "./public-order-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function CommanderPage() {
   const categories = await prisma.menuCategory.findMany({
     include: { items: { where: { available: true }, orderBy: { name: "asc" } } },

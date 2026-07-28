@@ -7,6 +7,8 @@ function formatFCFA(value: number) {
   return `${value.toLocaleString("fr-FR")} F`;
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const categories = await prisma.menuCategory.findMany({
     include: { items: { where: { available: true }, orderBy: { name: "asc" } } },

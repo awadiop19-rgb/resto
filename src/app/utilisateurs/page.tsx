@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { UserManager } from "./user-manager";
 import { PageContainer } from "@/components/page-container";
 
+export const dynamic = "force-dynamic";
+
 export default async function UtilisateursPage() {
   const session = await auth();
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });

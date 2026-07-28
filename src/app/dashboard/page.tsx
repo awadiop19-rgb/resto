@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { DashboardCharts } from "./dashboard-charts";
 import { PageContainer } from "@/components/page-container";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const [orders, expenses] = await Promise.all([
     prisma.order.findMany({

@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.vscode
+.claude
+.windsurf
+npm-debug.log*
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example
+dev.db
+build-output.txt
+build-run.log
+README.md

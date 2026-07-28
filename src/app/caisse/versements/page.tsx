@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { PageContainer } from "@/components/page-container";
 import { VersementsManager } from "./versements-manager";
 
+export const dynamic = "force-dynamic";
+
 export default async function VersementsPage() {
   const cashRegisters = await prisma.cashRegister.findMany({
     include: { cashier: true, correctedBy: true },

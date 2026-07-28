@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { PageContainer } from "@/components/page-container";
 import { ComptabiliteDepenses } from "./comptabilite-depenses";
 
+export const dynamic = "force-dynamic";
+
 export default async function ComptabiliteDepensesPage({
   searchParams,
 }: {

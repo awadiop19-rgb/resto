@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { OrderBoard } from "./order-board";
 import { PageContainer } from "@/components/page-container";
 
+export const dynamic = "force-dynamic";
+
 export default async function CommandesPage() {
   const session = await auth();
 

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { ExpenseManager } from "./expense-manager";
 import { PageContainer } from "@/components/page-container";
 
+export const dynamic = "force-dynamic";
+
 export default async function DepensesPage() {
   const expenses = await prisma.expense.findMany({
     include: { user: true },
