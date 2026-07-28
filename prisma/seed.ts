@@ -96,14 +96,14 @@ async function main() {
     {
       name: "Poulet Yassa",
       description: "Poulet mariné et grillé aux oignons confits, citron et moutarde, riz blanc",
-      imageUrl: "/dishes/yassa-poulet.webp",
+      imageUrl: "/dishes/yassa-poulet-plat.jpg",
       price: 5500,
       categoryId: plats.id,
     },
     {
       name: "Thiéboudienne",
       description: "Le plat national sénégalais : riz au poisson mijoté avec légumes et sauce tomate",
-      imageUrl: "/dishes/thieboudienne.webp",
+      imageUrl: "/dishes/thiebou-djeun-rouge.webp",
       price: 6000,
       categoryId: plats.id,
     },
@@ -131,7 +131,7 @@ async function main() {
     {
       name: "Steak Frites",
       description: "Entrecôte grillée, frites maison et beurre maître d'hôtel",
-      imageUrl: "https://images.pexels.com/photos/28992200/pexels-photo-28992200.jpeg",
+      imageUrl: "/dishes/steak-frites.jpg",
       price: 7000,
       categoryId: plats.id,
     },
@@ -156,7 +156,7 @@ async function main() {
       price: 1000,
       categoryId: boissons.id,
     },
-    { name: "Eau minérale", description: "50cl", imageUrl: null, price: 500, categoryId: boissons.id },
+    { name: "Eau minérale", description: "50cl", imageUrl: "/dishes/eau-minerale.png", price: 500, categoryId: boissons.id },
   ];
 
   for (const item of menuItems) {
