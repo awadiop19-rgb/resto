@@ -61,12 +61,29 @@ const imageByName: Record<string, string> = {
 };
 
 async function main() {
+  const allItems = await prisma.menuItem.findMany({
+    select: { id: true, name: true },
+  });
+  const byLowerName = new Map(allItems.map((i) => [i.name.toLowerCase(), i]));
+
   let updated = 0;
   for (const [name, imageUrl] of Object.entries(imageByName)) {
-    const result = await prisma.menuItem.updateMany({
+    let result = await prisma.menuItem.updateMany({
       where: { name },
       data: { imageUrl },
     });
+    if (result.count === 0) {
+      // Repli : correspondance insensible à la casse (utile si la casse
+      // en base diffère légèrement du nom attendu). SQLite ne supporte pas
+      // `mode: "insensitive"`, donc on compare côté JS.
+      const match = byLowerName.get(name.toLowerCase());
+      if (match) {
+        result = await prisma.menuItem.updateMany({
+          where: { id: match.id },
+          data: { imageUrl },
+        });
+      }
+    }
     if (result.count > 0) {
       updated += result.count;
       console.log(`OK  ${name} -> ${imageUrl} (${result.count})`);
@@ -75,6 +92,15 @@ async function main() {
     }
   }
   console.log(`Terminé. ${updated} item(s) mis à jour.`);
+
+  const remaining = await prisma.menuItem.findMany({
+    where: { imageUrl: null },
+    select: { name: true },
+  });
+  if (remaining.length > 0) {
+    console.log("Items sans image :");
+    for (const item of remaining) console.log(`  - ${item.name}`);
+  }
 }
 
 main()
