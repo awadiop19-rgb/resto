@@ -64,7 +64,9 @@ async function main() {
   const allItems = await prisma.menuItem.findMany({
     select: { id: true, name: true },
   });
-  const byLowerName = new Map(allItems.map((i) => [i.name.toLowerCase(), i]));
+  const byLowerName = new Map(
+    allItems.map((i) => [i.name.trim().toLowerCase(), i])
+  );
 
   let updated = 0;
   for (const [name, imageUrl] of Object.entries(imageByName)) {
