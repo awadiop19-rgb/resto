@@ -15,6 +15,7 @@ enum Role {
   SERVEUR
   CUISINE
   CAISSIER
+  COMPTABILITE
 }
 
 enum OrderStatus {

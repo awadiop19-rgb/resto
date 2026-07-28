@@ -18,11 +18,11 @@ const protectedRoutes = [
 
 // Ordre important : les préfixes les plus spécifiques doivent être vérifiés en premier.
 const routeRoles: { prefix: string; roles: Role[] }[] = [
-  { prefix: "/caisse/versements", roles: ["ADMIN"] },
+  { prefix: "/caisse/versements", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/dashboard", roles: ["ADMIN"] },
   { prefix: "/utilisateurs", roles: ["ADMIN"] },
-  { prefix: "/depenses", roles: ["ADMIN"] },
-  { prefix: "/comptabilite", roles: ["ADMIN"] },
+  { prefix: "/depenses", roles: ["ADMIN", "COMPTABILITE"] },
+  { prefix: "/comptabilite", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/caisse", roles: ["ADMIN", "CAISSIER"] },
 ];
 
@@ -45,7 +45,7 @@ export default auth((req) => {
   }
 
   if (isLoggedIn && nextUrl.pathname === "/login") {
-    const home = role === "CAISSIER" ? "/caisse" : "/commandes";
+    const home = role === "CAISSIER" ? "/caisse" : role === "COMPTABILITE" ? "/comptabilite" : "/commandes";
     return NextResponse.redirect(new URL(home, nextUrl));
   }
 });

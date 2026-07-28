@@ -9,7 +9,7 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
     { href: "/caisse", label: "Caisse" },
     { href: "/caisse/versements", label: "Versements" },
     { href: "/depenses", label: "Dépenses" },
-    { href: "/comptabilite/depenses", label: "Comptabilité" },
+    { href: "/comptabilite", label: "Comptabilité" },
     { href: "/utilisateurs", label: "Utilisateurs" },
     { href: "/profil", label: "Mon profil" },
   ],
@@ -25,6 +25,12 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
   CAISSIER: [
     { href: "/caisse", label: "Caisse" },
     { href: "/commandes", label: "Commandes" },
+    { href: "/profil", label: "Mon profil" },
+  ],
+  COMPTABILITE: [
+    { href: "/comptabilite", label: "Tableau de bord" },
+    { href: "/depenses", label: "Dépenses" },
+    { href: "/caisse/versements", label: "Versements" },
     { href: "/profil", label: "Mon profil" },
   ],
 };

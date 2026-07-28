@@ -14,7 +14,9 @@ const expenseSchema = z.object({
 
 export async function createExpense(input: z.infer<typeof expenseSchema>) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Non autorisé");
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
+    throw new Error("Non autorisé");
+  }
 
   const data = expenseSchema.parse(input);
 
@@ -34,7 +36,9 @@ export async function createExpense(input: z.infer<typeof expenseSchema>) {
 
 export async function deleteExpense(id: string) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Non autorisé");
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
+    throw new Error("Non autorisé");
+  }
 
   await prisma.expense.delete({ where: { id } });
   revalidatePath("/depenses");

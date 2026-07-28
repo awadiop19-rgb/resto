@@ -18,6 +18,7 @@ const ROLE_LABELS: Record<Role, string> = {
   SERVEUR: "Serveur",
   CUISINE: "Cuisine",
   CAISSIER: "Caissier",
+  COMPTABILITE: "Comptabilité",
 };
 
 export function UserManager({ users, currentUserId }: { users: User[]; currentUserId: string }) {

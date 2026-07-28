@@ -19,6 +19,14 @@ async function requireAdmin() {
   return session;
 }
 
+async function requireAdminOrComptabilite() {
+  const session = await auth();
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
+    throw new Error("Non autorisé");
+  }
+  return session;
+}
+
 export async function openCashRegister(openingFloat: number) {
   const session = await requireCashier();
 
@@ -117,7 +125,7 @@ const correctCashRegisterSchema = z.object({
 });
 
 export async function correctCashRegister(input: z.infer<typeof correctCashRegisterSchema>) {
-  const session = await requireAdmin();
+  const session = await requireAdminOrComptabilite();
   const data = correctCashRegisterSchema.parse(input);
 
   const cashRegister = await prisma.cashRegister.findUnique({ where: { id: data.id } });

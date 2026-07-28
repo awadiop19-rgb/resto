@@ -30,7 +30,7 @@ const createUserSchema = z.object({
   name: z.string().min(1, "Nom requis"),
   email: z.string().email("Email invalide"),
   password: z.string().min(6, "6 caractères minimum"),
-  role: z.enum(["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"]),
+  role: z.enum(["ADMIN", "SERVEUR", "CUISINE", "CAISSIER", "COMPTABILITE"]),
 });
 
 export async function createUser(input: z.infer<typeof createUserSchema>) {
