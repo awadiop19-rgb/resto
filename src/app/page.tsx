@@ -73,10 +73,9 @@ export default async function Home() {
           <img
             src="/dishes/thieboudienne.webp"
             alt="Thiéboudienne, plat signature de Saveur Amir"
-            className="absolute inset-0 h-full w-full object-cover opacity-50"
+            className="absolute inset-0 h-full w-full object-cover opacity-80"
           />
-          <div className="absolute inset-0 bg-linear-to-t from-black via-black/80 to-black/40" />
-          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/35 to-black/10" />
           <div
             aria-hidden
             className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-orange-500/20 blur-3xl"
