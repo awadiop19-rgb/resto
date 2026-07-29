@@ -5,7 +5,7 @@ import { ComptabiliteDashboard } from "./comptabilite-dashboard";
 export const dynamic = "force-dynamic";
 
 export default async function ComptabilitePage() {
-  const [expenses, closedCashRegisters] = await Promise.all([
+  const [expenses, closedCashRegisters, payments] = await Promise.all([
     prisma.expense.findMany({
       include: { user: true },
       orderBy: { date: "desc" },
@@ -14,6 +14,9 @@ export default async function ComptabilitePage() {
       where: { status: "FERMEE" },
       include: { cashier: true },
       orderBy: { closedAt: "desc" },
+    }),
+    prisma.payment.findMany({
+      include: { cashier: true },
     }),
   ]);
 
@@ -62,6 +65,47 @@ export default async function ComptabilitePage() {
     userName: e.user.name,
   }));
 
+  const salesByCashierMap = new Map<
+    string,
+    { cashierName: string; ordersCount: number; totalCash: number; totalWave: number }
+  >();
+  for (const payment of payments) {
+    const entry = salesByCashierMap.get(payment.cashierId) ?? {
+      cashierName: payment.cashier.name,
+      ordersCount: 0,
+      totalCash: 0,
+      totalWave: 0,
+    };
+    entry.ordersCount += 1;
+    if (payment.method === "CASH") entry.totalCash += payment.amount;
+    else entry.totalWave += payment.amount;
+    salesByCashierMap.set(payment.cashierId, entry);
+  }
+
+  const versementsByCashierMap = new Map<string, { versementsCount: number; totalVersed: number }>();
+  for (const cr of closedCashRegisters) {
+    const entry = versementsByCashierMap.get(cr.cashierId) ?? { versementsCount: 0, totalVersed: 0 };
+    entry.versementsCount += 1;
+    entry.totalVersed += versementAmount(cr);
+    versementsByCashierMap.set(cr.cashierId, entry);
+  }
+
+  const salesByCashier = Array.from(salesByCashierMap.entries())
+    .map(([cashierId, sales]) => {
+      const versements = versementsByCashierMap.get(cashierId) ?? { versementsCount: 0, totalVersed: 0 };
+      return {
+        cashierId,
+        cashierName: sales.cashierName,
+        ordersCount: sales.ordersCount,
+        totalCash: sales.totalCash,
+        totalWave: sales.totalWave,
+        totalSales: sales.totalCash + sales.totalWave,
+        versementsCount: versements.versementsCount,
+        totalVersed: versements.totalVersed,
+      };
+    })
+    .sort((a, b) => b.totalSales - a.totalSales);
+
   return (
     <PageContainer>
       <div className="space-y-6">
@@ -75,6 +119,7 @@ export default async function ComptabilitePage() {
           versementsByDay={versementsByDay}
           recentVersements={recentVersements}
           recentExpenses={recentExpenses}
+          salesByCashier={salesByCashier}
         />
       </div>
     </PageContainer>

@@ -37,6 +37,17 @@ type RecentExpense = {
   userName: string;
 };
 
+type SalesByCashier = {
+  cashierId: string;
+  cashierName: string;
+  ordersCount: number;
+  totalCash: number;
+  totalWave: number;
+  totalSales: number;
+  versementsCount: number;
+  totalVersed: number;
+};
+
 export function ComptabiliteDashboard({
   totalExpenses,
   totalVersements,
@@ -46,6 +57,7 @@ export function ComptabiliteDashboard({
   versementsByDay,
   recentVersements,
   recentExpenses,
+  salesByCashier,
 }: {
   totalExpenses: number;
   totalVersements: number;
@@ -55,6 +67,7 @@ export function ComptabiliteDashboard({
   versementsByDay: { date: string; total: number }[];
   recentVersements: RecentVersement[];
   recentExpenses: RecentExpense[];
+  salesByCashier: SalesByCashier[];
 }) {
   return (
     <div className="space-y-6">
@@ -205,6 +218,60 @@ export function ComptabiliteDashboard({
             </table>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="mb-3 font-semibold">Détail des ventes par caissier</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-slate-400">
+                <th className="pb-2">Caissier</th>
+                <th className="pb-2">Commandes encaissées</th>
+                <th className="pb-2">Ventes espèces</th>
+                <th className="pb-2">Ventes Wave</th>
+                <th className="pb-2">Total ventes</th>
+                <th className="pb-2">Versements</th>
+                <th className="pb-2">Total versé</th>
+                <th className="pb-2">Écart</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salesByCashier.map((c) => {
+                const ecart = c.totalCash - c.totalVersed;
+                return (
+                  <tr key={c.cashierId} className="border-t border-slate-100">
+                    <td className="py-2 pr-2 font-medium">{c.cashierName}</td>
+                    <td className="py-2 pr-2">{c.ordersCount}</td>
+                    <td className="py-2 pr-2">{formatFCFA(c.totalCash)}</td>
+                    <td className="py-2 pr-2">{formatFCFA(c.totalWave)}</td>
+                    <td className="py-2 pr-2 font-semibold">{formatFCFA(c.totalSales)}</td>
+                    <td className="py-2 pr-2">{c.versementsCount}</td>
+                    <td className="py-2 pr-2">{formatFCFA(c.totalVersed)}</td>
+                    <td
+                      className={`py-2 pr-2 font-semibold ${
+                        ecart === 0 ? "text-slate-400" : ecart > 0 ? "text-red-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {formatFCFA(ecart)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {salesByCashier.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-4 text-center text-slate-400">
+                    Aucune vente enregistrée.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          L&apos;écart correspond aux ventes en espèces non encore couvertes par un versement clôturé (positif = à
+          surveiller, en attente de versement).
+        </p>
       </div>
     </div>
   );
