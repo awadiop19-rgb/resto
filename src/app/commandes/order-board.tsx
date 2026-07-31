@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createOrder, updateOrder, updateOrderStatus, deleteOrder } from "@/lib/actions/orders";
 import type { OrderStatus } from "@/generated/prisma/client";
 import { downloadCsv } from "@/lib/csv";
+import { PriseCommandePhotos } from "./prise-commande-photos";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   EN_ATTENTE: "En attente",
@@ -16,7 +17,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 
 const STATUS_ORDER: OrderStatus[] = ["EN_ATTENTE", "EN_PREPARATION", "PRETE", "SERVIE", "ANNULEE"];
 
-type MenuItem = { id: string; name: string; price: number };
+type MenuItem = { id: string; name: string; price: number; imageUrl: string | null };
 type Category = { id: string; name: string; items: MenuItem[] };
 type OrderItem = {
   id: string;
@@ -57,6 +58,8 @@ export function OrderBoard({
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Le caissier travaille sur tablette : la carte en photos lui est proposée d'emblée.
+  const [vue, setVue] = useState<"photos" | "liste">(role === "CAISSIER" ? "photos" : "liste");
 
   const estBloque = Boolean(blocage);
   const canCreate = !estBloque && (role === "ADMIN" || role === "SERVEUR" || role === "CAISSIER");
@@ -193,7 +196,49 @@ export function OrderBoard({
     return sum + (item ? item.price * v.quantity : 0);
   }, 0);
 
+  const vuePhotos = canCreate && vue === "photos";
+
   return (
+    <div className="space-y-6">
+      {canCreate && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">{editingOrderId ? "Modifier la commande" : "Nouvelle commande"}</h2>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+            {(["photos", "liste"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setVue(v)}
+                aria-pressed={vue === v}
+                className={`min-h-10 rounded-md px-4 text-sm transition ${
+                  vue === v ? "bg-black font-medium text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {v === "photos" ? "Photos" : "Liste"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {vuePhotos && (
+        <PriseCommandePhotos
+          categories={categories}
+          cart={cart}
+          allItems={allItems}
+          cartTotal={cartTotal}
+          tableNumber={tableNumber}
+          editingOrderId={editingOrderId}
+          isPending={isPending}
+          onAdd={addToCart}
+          onRemove={removeFromCart}
+          onNote={updateNote}
+          onTableNumber={setTableNumber}
+          onSubmit={submitOrder}
+          onCancelEdit={cancelEdit}
+        />
+      )}
+
     <div className="grid gap-6 lg:grid-cols-3">
       {blocage && (
         <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 lg:col-span-3">
@@ -213,16 +258,15 @@ export function OrderBoard({
       {error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 lg:col-span-3">{error}</p>
       )}
-      {canCreate && (
+      {canCreate && vue === "liste" && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">{editingOrderId ? "Modifier la commande" : "Nouvelle commande"}</h2>
-            {editingOrderId && (
+          {editingOrderId && (
+            <div className="flex items-center justify-end">
               <button type="button" onClick={cancelEdit} className="text-xs text-slate-500 hover:underline">
-                Annuler
+                Annuler la modification
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-sm text-slate-600">N° de table</label>
             <input
@@ -309,7 +353,11 @@ export function OrderBoard({
         </div>
       )}
 
-      <div className={canCreate ? "space-y-3 lg:col-span-2" : "space-y-3 lg:col-span-3"}>
+      <div
+        className={
+          canCreate && vue === "liste" ? "space-y-3 lg:col-span-2" : "space-y-3 lg:col-span-3"
+        }
+      >
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Commandes en cours</h2>
           {orders.length > 0 && (
@@ -394,6 +442,7 @@ export function OrderBoard({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

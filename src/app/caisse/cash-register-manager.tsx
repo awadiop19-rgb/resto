@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { openCashRegister, payOrder } from "@/lib/actions/caisse";
 import type { PaymentMethod } from "@/generated/prisma/client";
+import { CHART } from "@/lib/chart-theme";
+import { formatFCFA } from "@/lib/format";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
 
 type Payment = { id: string; amount: number; method: PaymentMethod };
@@ -28,12 +30,29 @@ type UnpaidOrder = {
   items: OrderItem[];
 };
 
+type PaidOrder = {
+  paymentId: string;
+  paidAt: Date;
+  method: PaymentMethod;
+  amount: number;
+  tableNumber: number | null;
+  customerName: string | null;
+  items: { id: string; quantity: number; name: string }[];
+};
+
+function libelleCommande(order: { tableNumber: number | null; customerName: string | null }) {
+  if (order.tableNumber) return `Table ${order.tableNumber}`;
+  return order.customerName ?? "Commande en ligne";
+}
+
 export function CashRegisterManager({
   cashRegister,
   unpaidOrders,
+  paidOrders,
 }: {
   cashRegister: CashRegister | null;
   unpaidOrders: UnpaidOrder[];
+  paidOrders: PaidOrder[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +64,12 @@ export function CashRegisterManager({
 
   // Le tiroir est versé en entier à la comptabilité : le fond de caisse fait partie de l'attendu.
   const expectedCash = (cashRegister?.openingFloat ?? 0) + totalCash;
+
+  const restantAEncaisser = unpaidOrders.reduce(
+    (somme, order) => somme + order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0),
+    0,
+  );
+  const dejaEncaisse = paidOrders.reduce((s, order) => s + order.amount, 0);
 
   function handleOpen() {
     setError(null);
@@ -138,7 +163,22 @@ export function CashRegisterManager({
       )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 font-semibold">Commandes en attente de paiement</h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">
+            À encaisser
+            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              {unpaidOrders.length}
+            </span>
+          </h2>
+          {unpaidOrders.length > 0 && (
+            <span className="text-sm text-slate-500">
+              Reste à encaisser :{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">
+                {formatFCFA(restantAEncaisser)}
+              </span>
+            </span>
+          )}
+        </div>
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -156,7 +196,7 @@ export function CashRegisterManager({
               return (
                 <tr key={order.id} className="border-t border-slate-100 align-top">
                   <td className="py-2 pr-2">
-                    {order.tableNumber ? `Table ${order.tableNumber}` : (order.customerName ?? "Commande en ligne")}
+                    {libelleCommande(order)}
                     <div className="text-xs text-slate-400">
                       {new Date(order.createdAt).toLocaleString("fr-FR")}
                     </div>
@@ -164,7 +204,7 @@ export function CashRegisterManager({
                   <td className="py-2 pr-2 text-slate-600">
                     {order.items.map((i) => `${i.quantity}x ${i.menuItem.name}`).join(", ")}
                   </td>
-                  <td className="py-2 pr-2 font-semibold">{total.toLocaleString("fr-FR")} F</td>
+                  <td className="py-2 pr-2 font-semibold tabular-nums">{formatFCFA(total)}</td>
                   <td className="py-2 pr-2 text-right">
                     <div className="flex justify-end gap-2">
                       <button
@@ -195,6 +235,74 @@ export function CashRegisterManager({
             )}
           </tbody>
         </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">
+            Déjà encaissées
+            <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+              {paidOrders.length}
+            </span>
+          </h2>
+          {paidOrders.length > 0 && (
+            <span className="text-sm text-slate-500">
+              Total encaissé :{" "}
+              <span className="font-semibold text-slate-900 tabular-nums">{formatFCFA(dejaEncaisse)}</span>
+            </span>
+          )}
+        </div>
+        <p className="mb-3 text-xs text-slate-400">Vos encaissements de la journée, du plus récent au plus ancien.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-slate-400">
+                <th className="pb-2 pr-2 font-medium">Heure</th>
+                <th className="pb-2 pr-2 font-medium">Commande</th>
+                <th className="pb-2 pr-2 font-medium">Articles</th>
+                <th className="pb-2 pr-2 font-medium">Mode</th>
+                <th className="pb-2 pr-2 text-right font-medium">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paidOrders.map((order) => (
+                <tr key={order.paymentId} className="border-t border-slate-100 align-top">
+                  <td className="whitespace-nowrap py-2 pr-2 text-slate-500 tabular-nums">
+                    {new Date(order.paidAt).toLocaleTimeString("fr-FR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </td>
+                  <td className="py-2 pr-2 font-medium">{libelleCommande(order)}</td>
+                  <td className="py-2 pr-2 text-slate-600">
+                    {order.items.map((i) => `${i.quantity}x ${i.name}`).join(", ")}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-2">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-2 rounded-sm"
+                        style={{
+                          backgroundColor: order.method === "CASH" ? CHART.especes : CHART.wave,
+                        }}
+                      />
+                      {order.method === "CASH" ? "Espèces" : "Wave"}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-2 text-right font-semibold tabular-nums">
+                    {formatFCFA(order.amount)}
+                  </td>
+                </tr>
+              ))}
+              {paidOrders.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-slate-400">
+                    Aucune commande encaissée pour le moment.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -63,6 +63,23 @@ export default async function CaissePage() {
     .map(([name, quantity]) => ({ name, quantity }))
     .sort((a, b) => b.quantity - a.quantity);
 
+  // Commandes déjà encaissées par ce caissier aujourd'hui, la plus récente d'abord.
+  const paidOrders = payments
+    .map((payment) => ({
+      paymentId: payment.id,
+      paidAt: payment.createdAt,
+      method: payment.method,
+      amount: payment.amount,
+      tableNumber: payment.order.tableNumber,
+      customerName: payment.order.customerName,
+      items: payment.order.items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        name: item.menuItem.name,
+      })),
+    }))
+    .sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime());
+
   return (
     <PageContainer>
       <div className="space-y-6">
@@ -77,7 +94,11 @@ export default async function CaissePage() {
           totalWave={totalWave}
           dishesSold={dishesSold}
         />
-        <CashRegisterManager cashRegister={cashRegister} unpaidOrders={unpaidOrders} />
+        <CashRegisterManager
+          cashRegister={cashRegister}
+          unpaidOrders={unpaidOrders}
+          paidOrders={paidOrders}
+        />
       </div>
     </PageContainer>
   );
