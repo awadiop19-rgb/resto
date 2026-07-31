@@ -127,7 +127,9 @@ model CashRegister {
   openingFloat   Float  @default(0) // fond de caisse au démarrage
   totalCash      Float? // total encaissé en espèces (calculé à la fermeture)
   totalWave      Float? // total encaissé via Wave (calculé à la fermeture)
-  declaredAmount Float? // montant en espèces déclaré par le caissier pour versement
+  declaredAmount Float? // espèces comptées dans le tiroir et versées par le caissier (fond de caisse inclus)
+  expectedCash   Float? // espèces théoriquement présentes : fond de caisse + encaissements cash
+  difference     Float? // declaredAmount - expectedCash : négatif = manquant, positif = excédent
   note           String?
 
   // Correction éventuelle par la comptabilité (l'historique original reste inchangé ci-dessus)

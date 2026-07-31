@@ -4,7 +4,19 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { OrderStatus } from "@/generated/prisma/client";
+import type { OrderStatus, Role } from "@/generated/prisma/client";
+
+// Les Server Actions sont des endpoints HTTP publics : le contrôle fait dans l'UI
+// n'est pas une barrière de sécurité, chaque action doit vérifier le rôle elle-même.
+const ROLES_PRISE_COMMANDE: Role[] = ["ADMIN", "SERVEUR", "CAISSIER"];
+const ROLES_SUIVI_COMMANDE: Role[] = ["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"];
+
+async function requireRole(roles: Role[]) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Non authentifié");
+  if (!roles.includes(session.user.role)) throw new Error("Non autorisé");
+  return session;
+}
 
 const orderItemSchema = z.object({
   menuItemId: z.string(),
@@ -18,8 +30,7 @@ const createOrderSchema = z.object({
 });
 
 export async function createOrder(input: z.infer<typeof createOrderSchema>) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+  const session = await requireRole(ROLES_PRISE_COMMANDE);
 
   const data = createOrderSchema.parse(input);
 
@@ -105,15 +116,21 @@ const updateOrderSchema = z.object({
 });
 
 export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+  await requireRole(ROLES_PRISE_COMMANDE);
 
   const data = updateOrderSchema.parse(input);
 
-  const existing = await prisma.order.findUnique({ where: { id: data.orderId } });
+  const existing = await prisma.order.findUnique({
+    where: { id: data.orderId },
+    include: { payment: true },
+  });
   if (!existing) throw new Error("Commande introuvable");
   if (existing.status === "SERVIE" || existing.status === "ANNULEE") {
     throw new Error("Impossible de modifier une commande servie ou annulée");
+  }
+  // Le paiement fige un montant : modifier les articles après coup fausserait la caisse.
+  if (existing.payment) {
+    throw new Error("Impossible de modifier une commande déjà encaissée");
   }
 
   const menuItems = await prisma.menuItem.findMany({
@@ -147,16 +164,23 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Non authentifié");
+  await requireRole(ROLES_SUIVI_COMMANDE);
+
+  if (status === "ANNULEE") {
+    const payment = await prisma.payment.findUnique({ where: { orderId } });
+    if (payment) throw new Error("Impossible d'annuler une commande déjà encaissée");
+  }
 
   await prisma.order.update({ where: { id: orderId }, data: { status } });
   revalidatePath("/commandes");
+  revalidatePath("/caisse");
 }
 
 export async function deleteOrder(orderId: string) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Non autorisé");
+  await requireRole(["ADMIN"]);
+
+  const payment = await prisma.payment.findUnique({ where: { orderId } });
+  if (payment) throw new Error("Impossible de supprimer une commande déjà encaissée");
 
   await prisma.order.delete({ where: { id: orderId } });
   revalidatePath("/commandes");

@@ -13,12 +13,6 @@ async function requireCashier() {
   return session;
 }
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") throw new Error("Non autorisé");
-  return session;
-}
-
 async function requireAdminOrComptabilite() {
   const session = await auth();
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
@@ -85,6 +79,7 @@ export async function payOrder(input: z.infer<typeof payOrderSchema>) {
 }
 
 const closeCashRegisterSchema = z.object({
+  // Espèces comptées dans le tiroir à la fermeture, fond de caisse inclus.
   declaredAmount: z.number().min(0, "Montant invalide"),
   note: z.string().optional(),
 });
@@ -102,6 +97,15 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
   const totalCash = payments.filter((p) => p.method === "CASH").reduce((sum, p) => sum + p.amount, 0);
   const totalWave = payments.filter((p) => p.method === "WAVE").reduce((sum, p) => sum + p.amount, 0);
 
+  // Le tiroir est versé en entier : les espèces attendues incluent le fond de caisse.
+  const expectedCash = cashRegister.openingFloat + totalCash;
+  const difference = data.declaredAmount - expectedCash;
+
+  const note = data.note?.trim() ? data.note.trim() : null;
+  if (difference !== 0 && !note) {
+    throw new Error("Un écart de caisse a été constaté : indiquez son motif dans la note");
+  }
+
   await prisma.cashRegister.update({
     where: { id: cashRegister.id },
     data: {
@@ -110,12 +114,15 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
       totalCash,
       totalWave,
       declaredAmount: data.declaredAmount,
-      note: data.note?.trim() ? data.note.trim() : null,
+      expectedCash,
+      difference,
+      note,
     },
   });
 
   revalidatePath("/caisse");
   revalidatePath("/caisse/versements");
+  revalidatePath("/comptabilite");
 }
 
 const correctCashRegisterSchema = z.object({
@@ -143,4 +150,5 @@ export async function correctCashRegister(input: z.infer<typeof correctCashRegis
   });
 
   revalidatePath("/caisse/versements");
+  revalidatePath("/comptabilite");
 }

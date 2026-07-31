@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { openCashRegister, closeCashRegister, payOrder } from "@/lib/actions/caisse";
+import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 import type { PaymentMethod } from "@/generated/prisma/client";
 
 type Payment = { id: string; amount: number; method: PaymentMethod };
@@ -44,6 +45,12 @@ export function CashRegisterManager({
   const totalCash = cashRegister?.payments.filter((p) => p.method === "CASH").reduce((s, p) => s + p.amount, 0) ?? 0;
   const totalWave = cashRegister?.payments.filter((p) => p.method === "WAVE").reduce((s, p) => s + p.amount, 0) ?? 0;
 
+  // Le tiroir est versé en entier à la comptabilité : le fond de caisse fait partie de l'attendu.
+  const expectedCash = (cashRegister?.openingFloat ?? 0) + totalCash;
+  const declaredNumber = Number(declaredAmount);
+  const hasDeclared = declaredAmount !== "" && !Number.isNaN(declaredNumber);
+  const difference = hasDeclared ? declaredNumber - expectedCash : 0;
+
   function handleOpen() {
     setError(null);
     startTransition(async () => {
@@ -58,16 +65,26 @@ export function CashRegisterManager({
 
   function handleClose() {
     setError(null);
-    if (declaredAmount === "" || Number.isNaN(Number(declaredAmount))) {
-      setError("Indiquez le montant en espèces à verser");
+    if (!hasDeclared) {
+      setError("Indiquez le montant des espèces comptées dans le tiroir");
       return;
     }
-    if (!window.confirm("Confirmer la fermeture de la caisse et le versement ? Cette action est définitive.")) {
+    if (difference !== 0 && !closeNote.trim()) {
+      setError(
+        `Écart de ${formatSignedFCFA(difference)} par rapport aux ${formatFCFA(expectedCash)} attendus : indiquez le motif dans la note.`,
+      );
+      return;
+    }
+    const recap =
+      difference === 0
+        ? `Versement de ${formatFCFA(declaredNumber)}, caisse juste.`
+        : `Versement de ${formatFCFA(declaredNumber)} pour ${formatFCFA(expectedCash)} attendus, soit un écart de ${formatSignedFCFA(difference)}.`;
+    if (!window.confirm(`${recap}\n\nConfirmer la fermeture de la caisse ? Cette action est définitive.`)) {
       return;
     }
     startTransition(async () => {
       try {
-        await closeCashRegister({ declaredAmount: Number(declaredAmount), note: closeNote });
+        await closeCashRegister({ declaredAmount: declaredNumber, note: closeNote });
         setDeclaredAmount("");
         setCloseNote("");
       } catch (e) {
@@ -129,7 +146,7 @@ export function CashRegisterManager({
               Depuis {new Date(cashRegister.openedAt).toLocaleString("fr-FR")}
             </span>
           </div>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg bg-slate-50 p-3 text-sm">
               <div className="text-slate-500">Fond de caisse</div>
               <div className="font-semibold">{cashRegister.openingFloat.toLocaleString("fr-FR")} F</div>
@@ -142,15 +159,23 @@ export function CashRegisterManager({
               <div className="text-slate-500">Total encaissé (Wave)</div>
               <div className="font-semibold">{totalWave.toLocaleString("fr-FR")} F</div>
             </div>
+            <div className="rounded-lg bg-orange-50 p-3 text-sm">
+              <div className="text-orange-700">Espèces attendues en caisse</div>
+              <div className="font-semibold text-orange-800">{expectedCash.toLocaleString("fr-FR")} F</div>
+              <div className="mt-0.5 text-xs text-orange-600">Fond de caisse + encaissements Cash</div>
+            </div>
           </div>
 
           <div className="border-t border-slate-100 pt-4">
-            <h3 className="mb-2 text-sm font-semibold">Fermer la caisse et faire le versement</h3>
+            <h3 className="mb-1 text-sm font-semibold">Fermer la caisse et faire le versement</h3>
+            <p className="mb-3 text-xs text-slate-500">
+              Comptez la totalité des espèces présentes dans le tiroir, fond de caisse compris.
+            </p>
             <div className="grid gap-3 sm:grid-cols-4">
               <input
                 type="number"
                 min={0}
-                placeholder="Montant en espèces à verser"
+                placeholder="Espèces comptées dans le tiroir"
                 value={declaredAmount}
                 onChange={(e) => setDeclaredAmount(e.target.value)}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-sm sm:col-span-2"
@@ -169,6 +194,28 @@ export function CashRegisterManager({
                 Fermer la caisse
               </button>
             </div>
+
+            {hasDeclared && (
+              <div
+                className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                  difference === 0
+                    ? "bg-emerald-50 text-emerald-700"
+                    : difference < 0
+                      ? "bg-red-50 text-red-700"
+                      : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {difference === 0 ? (
+                  <>Caisse juste : le montant compté correspond aux {formatFCFA(expectedCash)} attendus.</>
+                ) : (
+                  <>
+                    Écart de <strong>{formatSignedFCFA(difference)}</strong>{" "}
+                    {difference < 0 ? "(manquant)" : "(excédent)"} sur les {formatFCFA(expectedCash)} attendus.
+                    Expliquez-le dans la note.
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

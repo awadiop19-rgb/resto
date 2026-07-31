@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageContainer } from "@/components/page-container";
 import { CashRegisterManager } from "./cash-register-manager";
 import { CaisseDashboard } from "./caisse-dashboard";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,10 @@ export default async function CaissePage() {
   return (
     <PageContainer>
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold">Caisse</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-semibold">Caisse</h1>
+          <AutoRefresh intervalMs={15000} />
+        </div>
         <CaisseDashboard
           ordersCount={payments.length}
           totalRevenue={totalCash + totalWave}

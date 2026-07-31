@@ -35,6 +35,7 @@ type Order = {
   createdAt: Date;
   user: { name: string } | null;
   items: OrderItem[];
+  payment: { id: string } | null;
 };
 
 export function OrderBoard({
@@ -139,14 +140,25 @@ export function OrderBoard({
   }
 
   function changeStatus(orderId: string, status: OrderStatus) {
+    setError(null);
     startTransition(async () => {
-      await updateOrderStatus(orderId, status);
+      try {
+        await updateOrderStatus(orderId, status);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur lors du changement de statut");
+      }
     });
   }
 
   function removeOrder(orderId: string) {
+    setError(null);
+    if (!window.confirm("Supprimer définitivement cette commande ?")) return;
     startTransition(async () => {
-      await deleteOrder(orderId);
+      try {
+        await deleteOrder(orderId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur lors de la suppression");
+      }
     });
   }
 
@@ -178,6 +190,11 @@ export function OrderBoard({
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
+      {/* Bandeau hors du panneau de saisie : la cuisine n'a pas ce panneau mais peut
+          déclencher des erreurs en changeant un statut. */}
+      {error && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 lg:col-span-3">{error}</p>
+      )}
       {canCreate && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 lg:col-span-1">
           <div className="flex items-center justify-between">
@@ -260,8 +277,6 @@ export function OrderBoard({
             </div>
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
           <div className="flex items-center justify-between border-t border-slate-100 pt-3">
             <span className="text-sm font-medium">Total : {cartTotal} F</span>
             <button
@@ -306,6 +321,11 @@ export function OrderBoard({
                         Commande en ligne
                       </span>
                     )}
+                    {order.payment && (
+                      <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                        Encaissée
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-slate-400">
                     {new Date(order.createdAt).toLocaleString("fr-FR")}
@@ -323,7 +343,7 @@ export function OrderBoard({
                       </option>
                     ))}
                   </select>
-                  {canCreate && order.status !== "SERVIE" && order.status !== "ANNULEE" && (
+                  {canCreate && order.status !== "SERVIE" && order.status !== "ANNULEE" && !order.payment && (
                     <button
                       onClick={() => startEdit(order)}
                       className="text-xs text-slate-600 hover:underline"
@@ -331,7 +351,7 @@ export function OrderBoard({
                       Modifier
                     </button>
                   )}
-                  {canDelete && (
+                  {canDelete && !order.payment && (
                     <button
                       onClick={() => removeOrder(order.id)}
                       className="text-xs text-red-600 hover:underline"
