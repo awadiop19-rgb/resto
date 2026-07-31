@@ -5,6 +5,7 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
   ADMIN: [
     { href: "/dashboard", label: "Tableau de bord" },
     { href: "/commandes", label: "Commandes" },
+    { href: "/livraisons", label: "Livraisons" },
     { href: "/menu", label: "Menu" },
     { href: "/caisse", label: "Caisse" },
     { href: "/caisse/versements", label: "Versements" },
@@ -25,6 +26,11 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
   CAISSIER: [
     { href: "/caisse", label: "Caisse" },
     { href: "/commandes", label: "Commandes" },
+    { href: "/livraisons", label: "Livraisons" },
+    { href: "/profil", label: "Mon profil" },
+  ],
+  LIVREUR: [
+    { href: "/mes-livraisons", label: "Mes livraisons" },
     { href: "/profil", label: "Mon profil" },
   ],
   COMPTABILITE: [

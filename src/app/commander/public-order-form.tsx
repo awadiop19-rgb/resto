@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { createPublicOrder } from "@/lib/actions/orders";
+import { SelecteurQuartier } from "@/components/selecteur-quartier";
+import type { QuartierOption } from "@/lib/quartiers";
 
 type MenuItem = { id: string; name: string; price: number; description: string | null };
 type Category = { id: string; name: string; items: MenuItem[] };
@@ -10,13 +13,23 @@ function formatFCFA(value: number) {
   return `${value.toLocaleString("fr-FR")} F`;
 }
 
-export function PublicOrderForm({ categories }: { categories: Category[] }) {
+export function PublicOrderForm({
+  categories,
+  quartiers,
+}: {
+  categories: Category[];
+  quartiers: QuartierOption[];
+}) {
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>({});
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [mode, setMode] = useState<"A_EMPORTER" | "LIVRAISON">("A_EMPORTER");
+  const [quartierId, setQuartierId] = useState("");
+  const [address, setAddress] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirmedOrderId, setConfirmedOrderId] = useState<string | null>(null);
+  const [reference, setReference] = useState<string | null>(null);
 
   const allItems = categories.flatMap((c) => c.items);
 
@@ -50,6 +63,10 @@ export function PublicOrderForm({ categories }: { categories: Category[] }) {
     return sum + (item ? item.price * v.quantity : 0);
   }, 0);
 
+  const quartierChoisi = quartiers.find((q) => q.id === quartierId);
+  const fraisLivraison = mode === "LIVRAISON" ? (quartierChoisi?.fee ?? 0) : 0;
+  const totalAPayer = cartTotal + fraisLivraison;
+
   function submit() {
     setError(null);
 
@@ -67,15 +84,27 @@ export function PublicOrderForm({ categories }: { categories: Category[] }) {
       setError("Merci de renseigner votre nom et votre numéro de téléphone.");
       return;
     }
+    if (mode === "LIVRAISON" && !quartierId) {
+      setError("Merci de choisir votre quartier de livraison.");
+      return;
+    }
+    if (mode === "LIVRAISON" && !address.trim()) {
+      setError("Merci d'indiquer l'adresse de livraison.");
+      return;
+    }
 
     startTransition(async () => {
       try {
-        const orderId = await createPublicOrder({
+        const nouvelleReference = await createPublicOrder({
           customerName: name.trim(),
           customerPhone: phone.trim(),
+          type: mode,
+          quartierId: mode === "LIVRAISON" ? quartierId : undefined,
+          deliveryAddress: mode === "LIVRAISON" ? address.trim() : undefined,
+          deliveryNote: mode === "LIVRAISON" && deliveryNote.trim() ? deliveryNote.trim() : undefined,
           items,
         });
-        setConfirmedOrderId(orderId);
+        setReference(nouvelleReference);
         setCart({});
       } catch (e) {
         setError(e instanceof Error ? e.message : "Une erreur est survenue, merci de réessayer.");
@@ -83,27 +112,48 @@ export function PublicOrderForm({ categories }: { categories: Category[] }) {
     });
   }
 
-  if (confirmedOrderId) {
+  if (reference) {
     return (
-      <div className="rounded-xl border border-orange-200 bg-white p-8 text-center shadow-sm">
+      <div className="mx-auto max-w-xl rounded-2xl border border-orange-200 bg-white p-8 text-center shadow-sm">
         <p className="text-4xl">✅</p>
         <h2 className="mt-3 text-2xl font-bold text-black">Merci {name || "!"} !</h2>
         <p className="mt-2 text-slate-600">
-          Votre commande a bien été envoyée à notre équipe. Nous vous contactons très vite au{" "}
-          <span className="font-semibold text-black">{phone}</span> pour confirmer.
+          {mode === "LIVRAISON"
+            ? "Votre commande part en préparation. Un livreur vous l'apportera à l'adresse indiquée."
+            : "Votre commande part en préparation. Vous pourrez la retirer au restaurant."}{" "}
+          Nous vous appelons au <span className="font-semibold text-black">{phone}</span> si besoin.
         </p>
-        <p className="mt-1 text-xs text-slate-400">Référence commande : {confirmedOrderId}</p>
-        <button
-          type="button"
-          onClick={() => {
-            setConfirmedOrderId(null);
-            setName("");
-            setPhone("");
-          }}
-          className="mt-6 rounded-md bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-        >
-          Passer une nouvelle commande
-        </button>
+
+        <div className="mt-6 rounded-xl bg-slate-50 p-5">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Numéro de commande</p>
+          <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-black">{reference}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            Notez-le : il vous permet de suivre votre commande.
+          </p>
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link
+            href={`/suivi?ref=${reference}`}
+            className="rounded-md bg-orange-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-orange-400"
+          >
+            Suivre ma commande
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setReference(null);
+              setName("");
+              setPhone("");
+              setAddress("");
+              setDeliveryNote("");
+              setMode("A_EMPORTER");
+            }}
+            className="rounded-md border border-neutral-300 px-5 py-2.5 text-sm font-semibold transition hover:bg-neutral-50"
+          >
+            Nouvelle commande
+          </button>
+        </div>
       </div>
     );
   }
@@ -186,12 +236,56 @@ export function PublicOrderForm({ categories }: { categories: Category[] }) {
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-neutral-100 pt-3 text-sm font-semibold">
-          <span>Total</span>
-          <span>{formatFCFA(cartTotal)}</span>
+        <div className="space-y-1 border-t border-neutral-100 pt-3 text-sm">
+          <div className="flex items-center justify-between text-slate-600">
+            <span>Sous-total</span>
+            <span>{formatFCFA(cartTotal)}</span>
+          </div>
+          {mode === "LIVRAISON" && (
+            <div className="flex items-center justify-between text-slate-600">
+              <span>
+                Livraison
+                {quartierChoisi && (
+                  <span className="text-xs text-slate-400"> · {quartierChoisi.zoneName}</span>
+                )}
+              </span>
+              <span>{quartierChoisi ? formatFCFA(fraisLivraison) : "à définir"}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between pt-1 text-base font-semibold">
+            <span>Total</span>
+            <span>{formatFCFA(totalAPayer)}</span>
+          </div>
         </div>
 
         <div className="space-y-3 border-t border-neutral-100 pt-3">
+          <div>
+            <span className="mb-1.5 block text-sm text-slate-600">Comment souhaitez-vous être servi ?</span>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { valeur: "A_EMPORTER", label: "À emporter", detail: "Je viens la chercher" },
+                  { valeur: "LIVRAISON", label: "Livraison", detail: "Livrée chez moi" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.valeur}
+                  type="button"
+                  onClick={() => setMode(option.valeur)}
+                  aria-pressed={mode === option.valeur}
+                  className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                    mode === option.valeur
+                      ? "border-orange-500 bg-orange-50 ring-1 ring-orange-200"
+                      : "border-neutral-300 hover:border-orange-300"
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-black">{option.label}</span>
+                  <span className="block text-xs text-slate-500">{option.detail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-sm text-slate-600">Nom complet</label>
             <input
@@ -212,6 +306,43 @@ export function PublicOrderForm({ categories }: { categories: Category[] }) {
               className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
             />
           </div>
+
+          {mode === "LIVRAISON" && (
+            <>
+              <SelecteurQuartier
+                quartiers={quartiers}
+                valeur={quartierId}
+                onChange={setQuartierId}
+                compact
+              />
+              <div>
+                <label className="mb-1 block text-sm text-slate-600" htmlFor="adresse-livraison">
+                  Adresse précise
+                </label>
+                <textarea
+                  id="adresse-livraison"
+                  rows={2}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Quartier, rue, n° de villa, point de repère…"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600" htmlFor="indication-livraison">
+                  Indication pour le livreur <span className="text-slate-400">(facultatif)</span>
+                </label>
+                <input
+                  id="indication-livraison"
+                  type="text"
+                  value={deliveryNote}
+                  onChange={(e) => setDeliveryNote(e.target.value)}
+                  placeholder="Ex : 2e étage, appeler en arrivant"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}

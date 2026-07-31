@@ -2,14 +2,18 @@ import { prisma } from "@/lib/prisma";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { PublicOrderForm } from "./public-order-form";
+import { getQuartiersLivrables } from "@/lib/zones-livraison";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommanderPage() {
-  const categories = await prisma.menuCategory.findMany({
-    include: { items: { where: { available: true }, orderBy: { name: "asc" } } },
-    orderBy: { name: "asc" },
-  });
+  const [categories, quartiers] = await Promise.all([
+    prisma.menuCategory.findMany({
+      include: { items: { where: { available: true }, orderBy: { name: "asc" } } },
+      orderBy: { name: "asc" },
+    }),
+    getQuartiersLivrables(),
+  ]);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -30,7 +34,7 @@ export default async function CommanderPage() {
             </p>
           </div>
 
-          <PublicOrderForm categories={categories} />
+          <PublicOrderForm categories={categories} quartiers={quartiers} />
         </div>
       </main>
       <SiteFooter />

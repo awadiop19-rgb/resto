@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertCaisseAJour } from "@/lib/journee-caisse";
+import { totalCommande } from "@/lib/total-commande";
 
 async function requireCashier() {
   const session = await auth();
@@ -64,7 +65,8 @@ export async function payOrder(input: z.infer<typeof payOrderSchema>) {
   if (order.status === "ANNULEE") throw new Error("Impossible d'encaisser une commande annulée");
   if (order.payment) throw new Error("Cette commande a déjà été payée");
 
-  const amount = order.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  // Le client règle les articles et, pour une livraison, les frais de la zone.
+  const amount = totalCommande(order.items, order.deliveryFee);
   if (amount <= 0) throw new Error("Le montant de la commande est invalide");
 
   await prisma.payment.create({

@@ -5,6 +5,7 @@ import { openCashRegister, payOrder } from "@/lib/actions/caisse";
 import type { PaymentMethod } from "@/generated/prisma/client";
 import { CHART } from "@/lib/chart-theme";
 import { formatFCFA } from "@/lib/format";
+import { totalCommande } from "@/lib/total-commande";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
 
 type Payment = { id: string; amount: number; method: PaymentMethod };
@@ -27,6 +28,7 @@ type UnpaidOrder = {
   customerName: string | null;
   source: "INTERNE" | "EN_LIGNE";
   createdAt: Date;
+  deliveryFee: number | null;
   items: OrderItem[];
 };
 
@@ -66,7 +68,7 @@ export function CashRegisterManager({
   const expectedCash = (cashRegister?.openingFloat ?? 0) + totalCash;
 
   const restantAEncaisser = unpaidOrders.reduce(
-    (somme, order) => somme + order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0),
+    (somme, order) => somme + totalCommande(order.items, order.deliveryFee),
     0,
   );
   const dejaEncaisse = paidOrders.reduce((s, order) => s + order.amount, 0);
@@ -191,7 +193,7 @@ export function CashRegisterManager({
           </thead>
           <tbody>
             {unpaidOrders.map((order) => {
-              const total = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+              const total = totalCommande(order.items, order.deliveryFee);
               const isPayingThis = isPending && payingOrderId === order.id;
               return (
                 <tr key={order.id} className="border-t border-slate-100 align-top">

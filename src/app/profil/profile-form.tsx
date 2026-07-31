@@ -10,6 +10,7 @@ const ROLE_LABELS: Record<Role, string> = {
   CUISINE: "Cuisine",
   CAISSIER: "Caissier",
   COMPTABILITE: "Comptabilité",
+  LIVREUR: "Livreur",
 };
 
 export function ProfileForm({ name, email, role }: { name: string; email: string; role: Role }) {

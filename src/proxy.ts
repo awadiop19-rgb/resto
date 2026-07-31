@@ -13,6 +13,8 @@ const protectedRoutes = [
   "/utilisateurs",
   "/caisse",
   "/comptabilite",
+  "/livraisons",
+  "/mes-livraisons",
   "/profil",
 ];
 
@@ -24,7 +26,32 @@ const routeRoles: { prefix: string; roles: Role[] }[] = [
   { prefix: "/depenses", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/comptabilite", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/caisse", roles: ["ADMIN", "CAISSIER"] },
+  // La configuration des tarifs reste à l'administration, pas au comptoir.
+  { prefix: "/livraisons/zones", roles: ["ADMIN"] },
+  { prefix: "/livraisons", roles: ["ADMIN", "CAISSIER"] },
+  { prefix: "/mes-livraisons", roles: ["ADMIN", "LIVREUR"] },
+  // Le livreur n'a rien à faire dans la salle : il n'a que ses tournées.
+  { prefix: "/commandes", roles: ["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"] },
+  { prefix: "/menu", roles: ["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"] },
 ];
+
+/**
+ * Page d'accueil de chaque rôle. Sert aussi de destination de repli quand un
+ * utilisateur atteint une page interdite : renvoyer tout le monde vers
+ * /commandes boucherait indéfiniment pour un livreur, qui n'y a pas accès.
+ */
+function accueilPour(role: Role | undefined) {
+  switch (role) {
+    case "CAISSIER":
+      return "/caisse";
+    case "COMPTABILITE":
+      return "/comptabilite";
+    case "LIVREUR":
+      return "/mes-livraisons";
+    default:
+      return "/commandes";
+  }
+}
 
 export default auth((req) => {
   const { nextUrl } = req;
@@ -41,12 +68,11 @@ export default auth((req) => {
   }
 
   if (isLoggedIn && restriction && !restriction.roles.includes(role as Role)) {
-    return NextResponse.redirect(new URL("/commandes", nextUrl));
+    return NextResponse.redirect(new URL(accueilPour(role), nextUrl));
   }
 
   if (isLoggedIn && nextUrl.pathname === "/login") {
-    const home = role === "CAISSIER" ? "/caisse" : role === "COMPTABILITE" ? "/comptabilite" : "/commandes";
-    return NextResponse.redirect(new URL(home, nextUrl));
+    return NextResponse.redirect(new URL(accueilPour(role), nextUrl));
   }
 });
 
@@ -59,6 +85,8 @@ export const config = {
     "/utilisateurs/:path*",
     "/caisse/:path*",
     "/comptabilite/:path*",
+    "/livraisons/:path*",
+    "/mes-livraisons/:path*",
     "/profil/:path*",
     "/login",
   ],

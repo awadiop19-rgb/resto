@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { formatFCFA } from "@/lib/format";
+import { ChampsTypeCommande, type InfosCommande } from "./champs-type-commande";
+import type { QuartierOption } from "@/lib/quartiers";
 
 type MenuItem = { id: string; name: string; price: number; imageUrl: string | null };
 type Category = { id: string; name: string; items: MenuItem[] };
@@ -21,30 +23,32 @@ function normalize(value: string) {
  */
 export function PriseCommandePhotos({
   categories,
+  quartiers,
   cart,
   allItems,
   cartTotal,
-  tableNumber,
+  infos,
   editingOrderId,
   isPending,
   onAdd,
   onRemove,
   onNote,
-  onTableNumber,
+  onInfos,
   onSubmit,
   onCancelEdit,
 }: {
   categories: Category[];
+  quartiers: QuartierOption[];
   cart: Cart;
   allItems: MenuItem[];
   cartTotal: number;
-  tableNumber: string;
+  infos: InfosCommande;
   editingOrderId: string | null;
   isPending: boolean;
   onAdd: (id: string) => void;
   onRemove: (id: string) => void;
   onNote: (id: string, note: string) => void;
-  onTableNumber: (value: string) => void;
+  onInfos: (infos: InfosCommande) => void;
   onSubmit: () => void;
   onCancelEdit: () => void;
 }) {
@@ -61,6 +65,9 @@ export function PriseCommandePhotos({
       }))
       .filter((c) => c.items.length > 0);
   }, [categories, categorieActive, recherche]);
+
+  const quartierChoisi = quartiers.find((q) => q.id === infos.quartierId);
+  const fraisLivraison = infos.type === "LIVRAISON" ? (quartierChoisi?.fee ?? 0) : 0;
 
   const nbArticles = Object.values(cart).reduce((s, l) => s + l.quantity, 0);
   const lignesPanier = Object.entries(cart)
@@ -199,21 +206,7 @@ export function PriseCommandePhotos({
             )}
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-slate-600" htmlFor="numero-table">
-              N° de table
-            </label>
-            <input
-              id="numero-table"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={tableNumber}
-              onChange={(e) => onTableNumber(e.target.value)}
-              placeholder="À emporter si vide"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base"
-            />
-          </div>
+          <ChampsTypeCommande infos={infos} onChange={onInfos} quartiers={quartiers} />
 
           <div className="max-h-[26rem] space-y-2 overflow-y-auto">
             {lignesPanier.length === 0 && (
@@ -258,11 +251,19 @@ export function PriseCommandePhotos({
           </div>
 
           <div className="border-t border-slate-100 pt-3">
+            {fraisLivraison > 0 && (
+              <div className="mb-1 flex items-baseline justify-between text-sm text-slate-500">
+                <span>Livraison{quartierChoisi ? ` · ${quartierChoisi.zoneName}` : ""}</span>
+                <span className="tabular-nums">{formatFCFA(fraisLivraison)}</span>
+              </div>
+            )}
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm text-slate-500">
                 {nbArticles} article{nbArticles > 1 ? "s" : ""}
               </span>
-              <span className="text-xl font-semibold tabular-nums">{formatFCFA(cartTotal)}</span>
+              <span className="text-xl font-semibold tabular-nums">
+                {formatFCFA(cartTotal + fraisLivraison)}
+              </span>
             </div>
             <button
               type="button"

@@ -3,9 +3,19 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createOrder, updateOrder, updateOrderStatus, deleteOrder } from "@/lib/actions/orders";
-import type { OrderStatus } from "@/generated/prisma/client";
+import type { DeliveryStatus, OrderStatus, OrderType } from "@/generated/prisma/client";
 import { downloadCsv } from "@/lib/csv";
 import { PriseCommandePhotos } from "./prise-commande-photos";
+import { ChampsTypeCommande, INFOS_VIDES, type InfosCommande } from "./champs-type-commande";
+import { totalCommande } from "@/lib/total-commande";
+import type { QuartierOption } from "@/lib/quartiers";
+import {
+  DELIVERY_CLASSES,
+  DELIVERY_LABELS,
+  SOURCE_LABELS,
+  TYPE_CLASSES,
+  TYPE_LABELS,
+} from "@/lib/libelles-commande";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   EN_ATTENTE: "En attente",
@@ -29,11 +39,20 @@ type OrderItem = {
 };
 type Order = {
   id: string;
+  reference: string | null;
   tableNumber: number | null;
   status: OrderStatus;
   source: "INTERNE" | "EN_LIGNE";
+  type: OrderType;
   customerName: string | null;
   customerPhone: string | null;
+  deliveryAddress: string | null;
+  deliveryNote: string | null;
+  deliveryStatus: DeliveryStatus | null;
+  quartierId: string | null;
+  quartierName: string | null;
+  deliveryFee: number | null;
+  livreur: { name: string } | null;
   createdAt: Date;
   user: { name: string } | null;
   items: OrderItem[];
@@ -43,18 +62,20 @@ type Order = {
 export function OrderBoard({
   orders,
   categories,
+  quartiers,
   role,
   blocage,
 }: {
   orders: Order[];
   categories: Category[];
+  quartiers: QuartierOption[];
   role: string;
   currentUserId: string;
   /** Message de blocage si une caisse antérieure n'est pas clôturée. */
   blocage?: string | null;
 }) {
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>({});
-  const [tableNumber, setTableNumber] = useState("");
+  const [infos, setInfos] = useState<InfosCommande>(INFOS_VIDES);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +116,15 @@ export function OrderBoard({
   function startEdit(order: Order) {
     setError(null);
     setEditingOrderId(order.id);
-    setTableNumber(order.tableNumber ? String(order.tableNumber) : "");
+    setInfos({
+      type: order.type,
+      tableNumber: order.tableNumber ? String(order.tableNumber) : "",
+      customerName: order.customerName ?? "",
+      customerPhone: order.customerPhone ?? "",
+      quartierId: order.quartierId ?? "",
+      deliveryAddress: order.deliveryAddress ?? "",
+      deliveryNote: order.deliveryNote ?? "",
+    });
     const nextCart: Record<string, { quantity: number; note: string }> = {};
     for (const item of order.items) {
       nextCart[item.menuItemId] = {
@@ -109,7 +138,7 @@ export function OrderBoard({
   function cancelEdit() {
     setEditingOrderId(null);
     setCart({});
-    setTableNumber("");
+    setInfos(INFOS_VIDES);
     setError(null);
   }
 
@@ -124,22 +153,44 @@ export function OrderBoard({
       setError("Ajoutez au moins un article au panier");
       return;
     }
+    if (
+      infos.type === "LIVRAISON" &&
+      !(infos.customerName.trim() && infos.customerPhone.trim() && infos.deliveryAddress.trim())
+    ) {
+      setError("Une livraison exige le nom, le téléphone et l'adresse du client.");
+      return;
+    }
+    if (infos.type === "LIVRAISON" && !infos.quartierId) {
+      setError("Choisissez le quartier de livraison : il détermine le tarif.");
+      return;
+    }
+
+    const communs = {
+      type: infos.type,
+      customerName: infos.customerName.trim() || undefined,
+      customerPhone: infos.customerPhone.trim() || undefined,
+      quartierId: infos.quartierId || undefined,
+      deliveryAddress: infos.deliveryAddress.trim() || undefined,
+      deliveryNote: infos.deliveryNote.trim() || undefined,
+      items,
+    };
+
     startTransition(async () => {
       try {
         if (editingOrderId) {
           await updateOrder({
+            ...communs,
             orderId: editingOrderId,
-            tableNumber: tableNumber ? Number(tableNumber) : null,
-            items,
+            tableNumber: infos.tableNumber ? Number(infos.tableNumber) : null,
           });
         } else {
           await createOrder({
-            tableNumber: tableNumber ? Number(tableNumber) : undefined,
-            items,
+            ...communs,
+            tableNumber: infos.tableNumber ? Number(infos.tableNumber) : undefined,
           });
         }
         setCart({});
-        setTableNumber("");
+        setInfos(INFOS_VIDES);
         setEditingOrderId(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
@@ -172,17 +223,22 @@ export function OrderBoard({
 
   function exportCsv() {
     const rows: (string | number)[][] = [
-      ["Date", "Table", "Statut", "Serveur", "Articles", "Total (F)"],
+      ["Date", "Référence", "Origine", "Type", "Table", "Statut", "Livraison", "Livreur", "Client", "Articles", "Total (F)"],
       ...orders.map((order) => {
-        const total = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+        const total = totalCommande(order.items, order.deliveryFee);
         const itemsText = order.items
           .map((i) => `${i.quantity}x ${i.menuItem.name}${i.note ? ` (${i.note})` : ""}`)
           .join(" | ");
         return [
           new Date(order.createdAt).toLocaleString("fr-FR"),
-          order.tableNumber ? `Table ${order.tableNumber}` : "À emporter",
+          order.reference ?? "",
+          SOURCE_LABELS[order.source],
+          TYPE_LABELS[order.type],
+          order.tableNumber ?? "",
           STATUS_LABELS[order.status],
-          order.source === "EN_LIGNE" ? `${order.customerName} (${order.customerPhone})` : (order.user?.name ?? ""),
+          order.deliveryStatus ? DELIVERY_LABELS[order.deliveryStatus] : "",
+          order.livreur?.name ?? "",
+          order.customerName ?? order.user?.name ?? "",
           itemsText,
           total,
         ];
@@ -224,16 +280,17 @@ export function OrderBoard({
       {vuePhotos && (
         <PriseCommandePhotos
           categories={categories}
+          quartiers={quartiers}
           cart={cart}
           allItems={allItems}
           cartTotal={cartTotal}
-          tableNumber={tableNumber}
+          infos={infos}
           editingOrderId={editingOrderId}
           isPending={isPending}
           onAdd={addToCart}
           onRemove={removeFromCart}
           onNote={updateNote}
-          onTableNumber={setTableNumber}
+          onInfos={setInfos}
           onSubmit={submitOrder}
           onCancelEdit={cancelEdit}
         />
@@ -267,16 +324,7 @@ export function OrderBoard({
               </button>
             </div>
           )}
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">N° de table</label>
-            <input
-              type="number"
-              min={1}
-              value={tableNumber}
-              onChange={(e) => setTableNumber(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-            />
-          </div>
+          <ChampsTypeCommande infos={infos} onChange={setInfos} quartiers={quartiers} compact />
 
           <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
             {categories.map((category) => (
@@ -372,27 +420,60 @@ export function OrderBoard({
         </div>
         {orders.length === 0 && <p className="text-sm text-slate-500">Aucune commande.</p>}
         {orders.map((order) => {
-          const total = order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+          const total = totalCommande(order.items, order.deliveryFee);
           return (
             <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    {order.tableNumber ? `Table ${order.tableNumber}` : "À emporter"}{" "}
-                    <span className="text-xs text-slate-400">
-                      · {order.source === "EN_LIGNE" ? `${order.customerName} (${order.customerPhone})` : order.user?.name}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {order.reference && (
+                      <span className="font-mono text-xs font-bold tracking-wider text-slate-500">
+                        {order.reference}
+                      </span>
+                    )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${TYPE_CLASSES[order.type]}`}
+                    >
+                      {TYPE_LABELS[order.type]}
+                      {order.type === "SUR_PLACE" && order.tableNumber ? ` ${order.tableNumber}` : ""}
                     </span>
-                    {order.source === "EN_LIGNE" && (
-                      <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-orange-700">
-                        Commande en ligne
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                        order.source === "EN_LIGNE"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {SOURCE_LABELS[order.source]}
+                    </span>
+                    {order.deliveryStatus && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${DELIVERY_CLASSES[order.deliveryStatus]}`}
+                      >
+                        {DELIVERY_LABELS[order.deliveryStatus]}
                       </span>
                     )}
                     {order.payment && (
-                      <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
                         Encaissée
                       </span>
                     )}
+                  </div>
+                  <p className="mt-1 font-medium">
+                    {order.customerName ?? (order.tableNumber ? `Table ${order.tableNumber}` : "Client")}
+                    <span className="ml-2 text-xs font-normal text-slate-400">
+                      {order.customerPhone ?? order.user?.name ?? ""}
+                    </span>
                   </p>
+                  {order.type === "LIVRAISON" && (
+                    <p className="text-xs text-slate-500">
+                      {order.quartierName && (
+                        <span className="font-medium text-slate-600">{order.quartierName} · </span>
+                      )}
+                      {order.deliveryAddress}
+                      {order.livreur && ` · livreur : ${order.livreur.name}`}
+                    </p>
+                  )}
                   <p className="text-xs text-slate-400">
                     {new Date(order.createdAt).toLocaleString("fr-FR")}
                   </p>
@@ -437,7 +518,15 @@ export function OrderBoard({
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-right text-sm font-semibold">Total : {total} F</p>
+              <div className="mt-2 text-right text-sm">
+                {order.deliveryFee ? (
+                  <p className="text-xs text-slate-400">
+                    Articles {order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)} F +
+                    livraison {order.deliveryFee} F
+                  </p>
+                ) : null}
+                <p className="font-semibold">Total : {total} F</p>
+              </div>
             </div>
           );
         })}

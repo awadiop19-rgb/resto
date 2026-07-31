@@ -16,6 +16,23 @@ enum Role {
   CUISINE
   CAISSIER
   COMPTABILITE
+  LIVREUR
+}
+
+// Comment la commande est servie. Distinct de OrderSource, qui dit d'où elle vient :
+// une commande prise en ligne peut être à emporter comme livrée.
+enum OrderType {
+  SUR_PLACE
+  A_EMPORTER
+  LIVRAISON
+}
+
+enum DeliveryStatus {
+  A_ASSIGNER
+  ASSIGNEE
+  EN_ROUTE
+  LIVREE
+  ECHOUEE
 }
 
 enum OrderStatus {
@@ -51,10 +68,34 @@ model User {
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
   orders                 Order[]
+  deliveries             Order[]        @relation("OrderLivreur")
   expenses               Expense[]
   payments               Payment[]
   cashRegisters          CashRegister[] @relation("CashRegisterCashier")
   correctedCashRegisters CashRegister[] @relation("CashRegisterCorrector")
+}
+
+// Zone de livraison : un tarif unique pour tous les quartiers qu'elle regroupe.
+model DeliveryZone {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  fee       Float
+  active    Boolean    @default(true)
+  quartiers Quartier[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// Un quartier n'appartient qu'à une seule zone : c'est lui que choisit le client,
+// et c'est de lui que découle le prix de la livraison.
+model Quartier {
+  id     String       @id @default(cuid())
+  name   String       @unique
+  zoneId String
+  zone   DeliveryZone @relation(fields: [zoneId], references: [id])
+  orders Order[]
+
+  @@index([zoneId])
 }
 
 model MenuCategory {
@@ -79,17 +120,40 @@ model MenuItem {
 
 model Order {
   id            String      @id @default(cuid())
+  // Code court communiqué au client pour suivre sa commande. Tiré au hasard
+  // plutôt que séquentiel : un numéro qui s'incrémente se devine, et donnerait
+  // accès au nom, au téléphone et à l'adresse des autres clients.
+  reference     String?     @unique
   tableNumber   Int?
   status        OrderStatus @default(EN_ATTENTE)
   source        OrderSource @default(INTERNE)
+  type          OrderType   @default(SUR_PLACE)
   customerName  String?
   customerPhone String?
   userId        String?
   user          User?       @relation(fields: [userId], references: [id])
   items         OrderItem[]
   payment       Payment?
+
+  // Livraison à domicile
+  deliveryAddress String?
+  deliveryNote    String?
+  quartierId      String?
+  quartier        Quartier?       @relation(fields: [quartierId], references: [id])
+  // Frais figés au moment de la commande : changer le tarif d'une zone ne doit
+  // pas réécrire le prix des livraisons déjà passées.
+  deliveryFee     Float?
+  deliveryStatus  DeliveryStatus?
+  livreurId       String?
+  livreur         User?           @relation("OrderLivreur", fields: [livreurId], references: [id])
+  assignedAt      DateTime?
+  deliveredAt     DateTime?
+
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+
+  @@index([deliveryStatus])
+  @@index([createdAt])
 }
 
 model OrderItem {
