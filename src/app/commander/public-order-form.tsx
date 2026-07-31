@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createPublicOrder } from "@/lib/actions/orders";
 import { SelecteurQuartier } from "@/components/selecteur-quartier";
+import { PaiementWave } from "@/components/paiement-wave";
 import type { QuartierOption } from "@/lib/quartiers";
 
 type MenuItem = { id: string; name: string; price: number; description: string | null };
@@ -30,6 +31,8 @@ export function PublicOrderForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
+  // Le panier est vidé après envoi : on fige le montant dû pour l'écran de paiement.
+  const [montantDu, setMontantDu] = useState(0);
 
   const allItems = categories.flatMap((c) => c.items);
 
@@ -105,6 +108,7 @@ export function PublicOrderForm({
           items,
         });
         setReference(nouvelleReference);
+        setMontantDu(totalAPayer);
         setCart({});
       } catch (e) {
         setError(e instanceof Error ? e.message : "Une erreur est survenue, merci de réessayer.");
@@ -130,6 +134,10 @@ export function PublicOrderForm({
           <p className="mt-2 text-xs text-slate-500">
             Notez-le : il vous permet de suivre votre commande.
           </p>
+        </div>
+
+        <div className="mt-6 text-left">
+          <PaiementWave reference={reference} montant={montantDu} />
         </div>
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">

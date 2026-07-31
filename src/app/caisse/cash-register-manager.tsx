@@ -29,6 +29,8 @@ type UnpaidOrder = {
   source: "INTERNE" | "EN_LIGNE";
   createdAt: Date;
   deliveryFee: number | null;
+  waveDeclaredAt: Date | null;
+  waveReference: string | null;
   items: OrderItem[];
 };
 
@@ -202,6 +204,22 @@ export function CashRegisterManager({
                     <div className="text-xs text-slate-400">
                       {new Date(order.createdAt).toLocaleString("fr-FR")}
                     </div>
+                    {order.waveDeclaredAt && (
+                      <div className="mt-1 rounded-md bg-sky-50 px-2 py-1 text-xs text-sky-800">
+                        <span className="font-semibold">Paiement Wave annoncé</span> à{" "}
+                        {new Date(order.waveDeclaredAt).toLocaleTimeString("fr-FR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {order.waveReference && (
+                          <>
+                            {" · "}
+                            <span className="font-mono">{order.waveReference}</span>
+                          </>
+                        )}
+                        <div className="text-sky-700">À vérifier dans Wave avant d&apos;encaisser.</div>
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 pr-2 text-slate-600">
                     {order.items.map((i) => `${i.quantity}x ${i.menuItem.name}`).join(", ")}

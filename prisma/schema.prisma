@@ -143,6 +143,12 @@ model Order {
   // Frais figés au moment de la commande : changer le tarif d'une zone ne doit
   // pas réécrire le prix des livraisons déjà passées.
   deliveryFee     Float?
+
+  // Paiement Wave annoncé par le client depuis le site. Ce n'est pas un
+  // encaissement : la caisse doit vérifier la réception dans Wave avant de
+  // valider. Seul un Payment fait foi.
+  waveDeclaredAt DateTime?
+  waveReference  String?
   deliveryStatus  DeliveryStatus?
   livreurId       String?
   livreur         User?           @relation("OrderLivreur", fields: [livreurId], references: [id])

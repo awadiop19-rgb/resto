@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { prisma } from "@/lib/prisma";
 import { formatFCFA } from "@/lib/format";
 import { sousTotal, totalCommande } from "@/lib/total-commande";
+import { PaiementWave } from "@/components/paiement-wave";
 import { normaliserReference } from "@/lib/reference-commande";
 import {
   DELIVERY_LABELS,
@@ -34,6 +35,7 @@ export default async function SuiviPage({
           items: { include: { menuItem: { select: { name: true } } } },
           livreur: { select: { name: true } },
           quartier: { select: { name: true } },
+          payment: { select: { id: true } },
         },
       })
     : null;
@@ -137,6 +139,21 @@ export default async function SuiviPage({
                   </p>
                 )}
               </div>
+
+              {/* Une commande annulée n'a plus à être payée. */}
+              {!commande.payment && commande.status !== "ANNULEE" && (
+                <PaiementWave
+                  reference={commande.reference!}
+                  montant={totalCommande(commande.items, commande.deliveryFee)}
+                  dejaDeclare={commande.waveDeclaredAt != null}
+                />
+              )}
+
+              {commande.payment && (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <span className="font-semibold">Commande réglée.</span> Merci !
+                </p>
+              )}
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-6">
                 <h2 className="font-semibold text-black">Le détail</h2>

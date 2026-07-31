@@ -38,7 +38,13 @@ export async function assignerLivreur(input: z.infer<typeof assignerSchema>) {
 
   const commandes = await prisma.order.findMany({
     where: { id: { in: data.orderIds } },
-    select: { id: true, type: true, deliveryStatus: true, reference: true },
+    select: {
+      id: true,
+      type: true,
+      deliveryStatus: true,
+      reference: true,
+      payment: { select: { id: true } },
+    },
   });
 
   if (commandes.length !== data.orderIds.length) throw new Error("Commande introuvable");
@@ -46,6 +52,15 @@ export async function assignerLivreur(input: z.infer<typeof assignerSchema>) {
   const nonLivrables = commandes.filter((c) => c.type !== "LIVRAISON");
   if (nonLivrables.length > 0) {
     throw new Error("Seule une commande en livraison peut être confiée à un livreur");
+  }
+  // Une commande part encaissée : le livreur ne collecte pas d'argent.
+  const impayees = commandes.filter((c) => !c.payment);
+  if (impayees.length > 0) {
+    throw new Error(
+      `Encaissez d'abord ${impayees.length > 1 ? "ces commandes" : "cette commande"} avant de la confier à un livreur : ${impayees
+        .map((c) => c.reference ?? "sans référence")
+        .join(", ")}`,
+    );
   }
   // Une commande déjà remise au client ne se réaffecte pas.
   const terminees = commandes.filter((c) => c.deliveryStatus === "LIVREE");

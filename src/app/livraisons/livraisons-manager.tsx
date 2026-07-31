@@ -54,7 +54,10 @@ export function LivraisonsManager({
 
   const enCours = commandes.filter((c) => c.deliveryStatus !== "LIVREE");
   const terminees = commandes.filter((c) => c.deliveryStatus === "LIVREE");
-  const aAffecter = enCours.filter((c) => !c.livreur);
+  const sansLivreur = enCours.filter((c) => !c.livreur);
+  // Une commande impayée ne part pas : le livreur ne collecte pas d'argent.
+  const affectables = sansLivreur.filter((c) => c.paye);
+  const enAttentePaiement = sansLivreur.filter((c) => !c.paye);
 
   function basculer(id: string) {
     setSelection((prev) => {
@@ -67,7 +70,7 @@ export function LivraisonsManager({
 
   function toutSelectionner() {
     setSelection((prev) =>
-      prev.size === aAffecter.length ? new Set() : new Set(aAffecter.map((c) => c.id)),
+      prev.size === affectables.length ? new Set() : new Set(affectables.map((c) => c.id)),
     );
   }
 
@@ -144,23 +147,29 @@ export function LivraisonsManager({
             <h2 className="font-semibold">
               À affecter
               <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                {aAffecter.length}
+                {affectables.length}
               </span>
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               {selection.size > 0
                 ? `${selection.size} commande(s) sélectionnée(s)`
                 : "Cochez les commandes à confier à un même livreur."}
+              {enAttentePaiement.length > 0 && (
+                <span className="text-amber-700">
+                  {" "}
+                  · {enAttentePaiement.length} en attente d&apos;encaissement
+                </span>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {aAffecter.length > 0 && (
+            {affectables.length > 0 && (
               <button
                 type="button"
                 onClick={toutSelectionner}
                 className="min-h-10 rounded-md border border-slate-300 px-3 text-sm transition hover:bg-slate-50"
               >
-                {selection.size === aAffecter.length ? "Tout décocher" : "Tout cocher"}
+                {selection.size === affectables.length ? "Tout décocher" : "Tout cocher"}
               </button>
             )}
             <select
@@ -197,17 +206,23 @@ export function LivraisonsManager({
         )}
 
         {enCours.map((commande) => {
-          const selectionnable = !commande.livreur;
+          // Sans encaissement, la case n'est même pas proposée.
+          const selectionnable = !commande.livreur && commande.paye;
+          const bloqueeFautePaiement = !commande.livreur && !commande.paye;
           const coche = selection.has(commande.id);
           return (
             <div
               key={commande.id}
               className={`rounded-xl border bg-white p-4 transition ${
-                coche ? "border-orange-400 ring-1 ring-orange-200" : "border-slate-200"
+                coche
+                  ? "border-orange-400 ring-1 ring-orange-200"
+                  : bloqueeFautePaiement
+                    ? "border-slate-200 border-l-4 border-l-red-400"
+                    : "border-slate-200"
               }`}
             >
               <div className="flex flex-wrap items-start gap-3">
-                {selectionnable && (
+                {selectionnable ? (
                   <label className="flex min-h-11 cursor-pointer items-center pt-0.5">
                     <input
                       type="checkbox"
@@ -217,7 +232,19 @@ export function LivraisonsManager({
                       aria-label={`Sélectionner la commande ${commande.reference ?? ""}`}
                     />
                   </label>
-                )}
+                ) : bloqueeFautePaiement ? (
+                  <span
+                    className="flex min-h-11 items-center pt-0.5"
+                    title="Encaissez cette commande avant de la confier à un livreur"
+                  >
+                    <input
+                      type="checkbox"
+                      disabled
+                      className="h-5 w-5 cursor-not-allowed"
+                      aria-label={`Commande ${commande.reference ?? ""} non encaissée : affectation impossible`}
+                    />
+                  </span>
+                ) : null}
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -236,7 +263,7 @@ export function LivraisonsManager({
                     )}
                     {!commande.paye && (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                        Non encaissée
+                        À encaisser
                       </span>
                     )}
                   </div>
@@ -288,6 +315,13 @@ export function LivraisonsManager({
                       >
                         Retirer le livreur
                       </button>
+                    </div>
+                  ) : bloqueeFautePaiement ? (
+                    <div className="mt-2">
+                      <p className="text-xs font-medium text-red-700">Encaissement requis</p>
+                      <Link href="/caisse" className="text-xs text-orange-600 hover:underline">
+                        Aller à la caisse
+                      </Link>
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-amber-700">En attente d&apos;affectation</p>
