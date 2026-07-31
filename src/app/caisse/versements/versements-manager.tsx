@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { correctCashRegister } from "@/lib/actions/caisse";
 import { downloadCsv } from "@/lib/csv";
+import { formatSignedFCFA } from "@/lib/format";
 import type { CashRegisterStatus } from "@/generated/prisma/client";
 
 type CashRegister = {
@@ -14,6 +16,8 @@ type CashRegister = {
   totalCash: number | null;
   totalWave: number | null;
   declaredAmount: number | null;
+  expectedCash: number | null;
+  difference: number | null;
   note: string | null;
   correctedAmount: number | null;
   correctionNote: string | null;
@@ -48,7 +52,10 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
         "Fond de caisse",
         "Total Cash",
         "Total Wave",
+        "Espèces attendues",
         "Montant déclaré",
+        "Écart",
+        "Motif de l'écart",
         "Statut",
         "Montant corrigé",
         "Motif correction",
@@ -60,7 +67,10 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
         c.openingFloat,
         c.totalCash ?? "",
         c.totalWave ?? "",
+        c.expectedCash ?? "",
         c.declaredAmount ?? "",
+        c.difference ?? "",
+        c.note ?? "",
         c.status,
         c.correctedAmount ?? "",
         c.correctionNote ?? "",
@@ -140,7 +150,9 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
               <th className="pb-2">Fond de caisse</th>
               <th className="pb-2">Cash</th>
               <th className="pb-2">Wave</th>
+              <th className="pb-2">Attendu</th>
               <th className="pb-2">Déclaré</th>
+              <th className="pb-2">Écart</th>
               <th className="pb-2">Statut</th>
               <th className="pb-2">Correction</th>
               <th className="pb-2"></th>
@@ -157,8 +169,29 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
                 <td className="py-2 pr-2">{c.openingFloat.toLocaleString("fr-FR")} F</td>
                 <td className="py-2 pr-2">{c.totalCash != null ? `${c.totalCash.toLocaleString("fr-FR")} F` : "-"}</td>
                 <td className="py-2 pr-2">{c.totalWave != null ? `${c.totalWave.toLocaleString("fr-FR")} F` : "-"}</td>
+                <td className="py-2 pr-2">
+                  {c.expectedCash != null ? `${c.expectedCash.toLocaleString("fr-FR")} F` : "-"}
+                </td>
                 <td className="py-2 pr-2 font-semibold">
                   {c.declaredAmount != null ? `${c.declaredAmount.toLocaleString("fr-FR")} F` : "-"}
+                </td>
+                <td className="py-2 pr-2">
+                  {c.difference == null ? (
+                    <span className="text-slate-400">-</span>
+                  ) : c.difference === 0 ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Juste</span>
+                  ) : (
+                    <div>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          c.difference < 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {formatSignedFCFA(c.difference)}
+                      </span>
+                      {c.note && <div className="mt-1 text-xs text-slate-500">{c.note}</div>}
+                    </div>
+                  )}
                 </td>
                 <td className="py-2 pr-2">
                   <span
@@ -186,8 +219,7 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
                   )}
                 </td>
                 <td className="py-2 pr-2 text-right">
-                  {c.status === "FERMEE" &&
-                    (editingId === c.id ? (
+                  {editingId === c.id ? (
                       <div className="flex flex-col items-end gap-1">
                         <input
                           type="number"
@@ -220,16 +252,29 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
                         </div>
                       </div>
                     ) : (
-                      <button onClick={() => startCorrection(c)} className="text-xs text-slate-600 hover:underline">
-                        Corriger
-                      </button>
-                    ))}
+                      <div className="flex justify-end gap-3">
+                        <Link
+                          href={`/caisse/versements/${c.id}`}
+                          className="whitespace-nowrap text-xs text-orange-600 hover:underline"
+                        >
+                          Détail
+                        </Link>
+                        {c.status === "FERMEE" && (
+                          <button
+                            onClick={() => startCorrection(c)}
+                            className="text-xs text-slate-600 hover:underline"
+                          >
+                            Corriger
+                          </button>
+                        )}
+                      </div>
+                    )}
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-4 text-center text-slate-400">
+                <td colSpan={12} className="py-4 text-center text-slate-400">
                   Aucun versement enregistré.
                 </td>
               </tr>
