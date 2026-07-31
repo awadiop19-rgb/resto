@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { createOrder, updateOrder, updateOrderStatus, deleteOrder } from "@/lib/actions/orders";
 import type { OrderStatus } from "@/generated/prisma/client";
 import { downloadCsv } from "@/lib/csv";
@@ -42,11 +43,14 @@ export function OrderBoard({
   orders,
   categories,
   role,
+  blocage,
 }: {
   orders: Order[];
   categories: Category[];
   role: string;
   currentUserId: string;
+  /** Message de blocage si une caisse antérieure n'est pas clôturée. */
+  blocage?: string | null;
 }) {
   const [cart, setCart] = useState<Record<string, { quantity: number; note: string }>>({});
   const [tableNumber, setTableNumber] = useState("");
@@ -54,8 +58,9 @@ export function OrderBoard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const canCreate = role === "ADMIN" || role === "SERVEUR" || role === "CAISSIER";
-  const canDelete = role === "ADMIN";
+  const estBloque = Boolean(blocage);
+  const canCreate = !estBloque && (role === "ADMIN" || role === "SERVEUR" || role === "CAISSIER");
+  const canDelete = !estBloque && role === "ADMIN";
 
   const allItems = categories.flatMap((c) => c.items);
 
@@ -190,6 +195,19 @@ export function OrderBoard({
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
+      {blocage && (
+        <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 lg:col-span-3">
+          <p className="font-semibold text-red-800">Service suspendu</p>
+          <p className="mt-1 text-sm text-red-700">{blocage}</p>
+          <Link
+            href="/caisse"
+            className="mt-3 inline-block rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-red-700"
+          >
+            Clôturer ma caisse
+          </Link>
+        </div>
+      )}
+
       {/* Bandeau hors du panneau de saisie : la cuisine n'a pas ce panneau mais peut
           déclencher des erreurs en changeant un statut. */}
       {error && (
@@ -334,8 +352,9 @@ export function OrderBoard({
                 <div className="flex items-center gap-2">
                   <select
                     value={order.status}
+                    disabled={estBloque}
                     onChange={(e) => changeStatus(order.id, e.target.value as OrderStatus)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   >
                     {STATUS_ORDER.map((s) => (
                       <option key={s} value={s}>

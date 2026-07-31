@@ -3,13 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { PageContainer } from "@/components/page-container";
 import { CashRegisterManager } from "./cash-register-manager";
 import { CaisseDashboard } from "./caisse-dashboard";
+import { CaissesEnRetard } from "./caisse-en-retard";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { getCaissesNonFermees } from "@/lib/journee-caisse";
 
 export const dynamic = "force-dynamic";
 
 export default async function CaissePage() {
   const session = await auth();
   const userId = session!.user.id;
+
+  // Une caisse laissée ouverte sur une journée antérieure bloque tout le reste :
+  // on n'affiche que l'écran de rattrapage tant qu'elle n'est pas clôturée.
+  const caissesEnRetard = await getCaissesNonFermees(userId);
+  if (caissesEnRetard.length > 0) {
+    return (
+      <PageContainer>
+        <div className="space-y-6">
+          <h1 className="text-2xl font-semibold">Caisse</h1>
+          <CaissesEnRetard caisses={caissesEnRetard} />
+        </div>
+      </PageContainer>
+    );
+  }
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

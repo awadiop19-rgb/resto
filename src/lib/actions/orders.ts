@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { OrderStatus, Role } from "@/generated/prisma/client";
+import { assertCaisseAJour } from "@/lib/journee-caisse";
 
 // Les Server Actions sont des endpoints HTTP publics : le contrôle fait dans l'UI
 // n'est pas une barrière de sécurité, chaque action doit vérifier le rôle elle-même.
@@ -15,6 +16,16 @@ async function requireRole(roles: Role[]) {
   const session = await auth();
   if (!session?.user) throw new Error("Non authentifié");
   if (!roles.includes(session.user.role)) throw new Error("Non autorisé");
+  return session;
+}
+
+/**
+ * Actions de service courant : interdites tant qu'une caisse d'une journée
+ * antérieure n'est pas clôturée.
+ */
+async function requireRoleEnService(roles: Role[]) {
+  const session = await requireRole(roles);
+  await assertCaisseAJour(session.user.id, session.user.role);
   return session;
 }
 
@@ -30,7 +41,7 @@ const createOrderSchema = z.object({
 });
 
 export async function createOrder(input: z.infer<typeof createOrderSchema>) {
-  const session = await requireRole(ROLES_PRISE_COMMANDE);
+  const session = await requireRoleEnService(ROLES_PRISE_COMMANDE);
 
   const data = createOrderSchema.parse(input);
 
@@ -116,7 +127,7 @@ const updateOrderSchema = z.object({
 });
 
 export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
-  await requireRole(ROLES_PRISE_COMMANDE);
+  await requireRoleEnService(ROLES_PRISE_COMMANDE);
 
   const data = updateOrderSchema.parse(input);
 
@@ -164,7 +175,7 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
-  await requireRole(ROLES_SUIVI_COMMANDE);
+  await requireRoleEnService(ROLES_SUIVI_COMMANDE);
 
   if (status === "ANNULEE") {
     const payment = await prisma.payment.findUnique({ where: { orderId } });

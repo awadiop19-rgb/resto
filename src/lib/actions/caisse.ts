@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { assertCaisseAJour } from "@/lib/journee-caisse";
 
 async function requireCashier() {
   const session = await auth();
@@ -23,6 +24,7 @@ async function requireAdminOrComptabilite() {
 
 export async function openCashRegister(openingFloat: number) {
   const session = await requireCashier();
+  await assertCaisseAJour(session.user.id, session.user.role);
 
   const existing = await prisma.cashRegister.findFirst({
     where: { cashierId: session.user.id, status: "OUVERTE" },
@@ -46,6 +48,7 @@ const payOrderSchema = z.object({
 
 export async function payOrder(input: z.infer<typeof payOrderSchema>) {
   const session = await requireCashier();
+  await assertCaisseAJour(session.user.id, session.user.role);
   const data = payOrderSchema.parse(input);
 
   const cashRegister = await prisma.cashRegister.findFirst({

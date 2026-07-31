@@ -3,13 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { OrderBoard } from "./order-board";
 import { PageContainer } from "@/components/page-container";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { getCaissesNonFermees, messageBlocage } from "@/lib/journee-caisse";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommandesPage() {
   const session = await auth();
+  const { id: userId, role } = session!.user;
 
-  const [orders, categories] = await Promise.all([
+  const [orders, categories, caissesEnRetard] = await Promise.all([
     prisma.order.findMany({
       include: {
         items: { include: { menuItem: true } },
@@ -22,6 +24,8 @@ export default async function CommandesPage() {
       include: { items: { where: { available: true } } },
       orderBy: { name: "asc" },
     }),
+    // Une caisse d'une journée antérieure restée ouverte suspend le service.
+    role === "CAISSIER" || role === "ADMIN" ? getCaissesNonFermees(userId) : Promise.resolve([]),
   ]);
 
   return (
@@ -34,8 +38,9 @@ export default async function CommandesPage() {
         <OrderBoard
           orders={orders}
           categories={categories}
-          role={session!.user.role}
-          currentUserId={session!.user.id}
+          role={role}
+          currentUserId={userId}
+          blocage={caissesEnRetard.length > 0 ? messageBlocage(caissesEnRetard) : null}
         />
       </div>
     </PageContainer>
