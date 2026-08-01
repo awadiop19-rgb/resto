@@ -10,6 +10,7 @@ import {
   supprimerQuartier,
   supprimerZone,
 } from "@/lib/actions/zones";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { formatFCFA } from "@/lib/format";
 
 type Quartier = { id: string; name: string; commandes: number };
@@ -28,7 +29,9 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await action();
+        // Passage obligé des actions de cette page : traiter le refus ici évite
+        // de l'envelopper dans chaque appel transmis en une seule ligne.
+        assurerSucces(await action());
       } catch (e) {
         setError(e instanceof Error ? e.message : message);
       }
@@ -40,7 +43,7 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
     if (!nouvelleZone.name.trim()) return setError("Donnez un nom à la zone.");
     if (nouvelleZone.fee === "" || Number.isNaN(fee)) return setError("Indiquez le tarif de la zone.");
     lancer(async () => {
-      await creerZone({ name: nouvelleZone.name.trim(), fee });
+      assurerSucces(await creerZone({ name: nouvelleZone.name.trim(), fee }));
       setNouvelleZone({ name: "", fee: "" });
     }, "Erreur lors de la création de la zone");
   }
@@ -50,7 +53,7 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
     if (!edition.name.trim()) return setError("Le nom de la zone est requis.");
     if (edition.fee === "" || Number.isNaN(fee)) return setError("Tarif invalide.");
     lancer(async () => {
-      await modifierZone(id, { name: edition.name.trim(), fee });
+      assurerSucces(await modifierZone(id, { name: edition.name.trim(), fee }));
       setZoneEnEdition(null);
     }, "Erreur lors de la modification");
   }
@@ -59,7 +62,7 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
     const nom = (nouveauQuartier[zoneId] ?? "").trim();
     if (!nom) return setError("Indiquez le nom du quartier.");
     lancer(async () => {
-      await creerQuartier({ name: nom, zoneId });
+      assurerSucces(await creerQuartier({ name: nom, zoneId }));
       setNouveauQuartier((prev) => ({ ...prev, [zoneId]: "" }));
     }, "Erreur lors de l'ajout du quartier");
   }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Role } from "@/generated/prisma/client";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 
 async function requireRole(roles: Role[]) {
   const session = await auth();
@@ -30,11 +31,14 @@ const assignerSchema = z.object({
 /** Affecte un livreur à une ou plusieurs commandes en une seule fois. */
 export async function assignerLivreur(input: z.infer<typeof assignerSchema>) {
   await requireRole(ROLES_REPARTITION);
-  const data = assignerSchema.parse(input);
+
+  const parsed = assignerSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const livreur = await prisma.user.findUnique({ where: { id: data.livreurId } });
-  if (!livreur || livreur.role !== "LIVREUR") throw new Error("Livreur introuvable");
-  if (!livreur.active) throw new Error("Ce livreur est désactivé");
+  if (!livreur || livreur.role !== "LIVREUR") return refus("Livreur introuvable");
+  if (!livreur.active) return refus("Ce livreur est désactivé");
 
   const commandes = await prisma.order.findMany({
     where: { id: { in: data.orderIds } },
@@ -47,16 +51,16 @@ export async function assignerLivreur(input: z.infer<typeof assignerSchema>) {
     },
   });
 
-  if (commandes.length !== data.orderIds.length) throw new Error("Commande introuvable");
+  if (commandes.length !== data.orderIds.length) return refus("Commande introuvable");
 
   const nonLivrables = commandes.filter((c) => c.type !== "LIVRAISON");
   if (nonLivrables.length > 0) {
-    throw new Error("Seule une commande en livraison peut être confiée à un livreur");
+    return refus("Seule une commande en livraison peut être confiée à un livreur");
   }
   // Une commande part encaissée : le livreur ne collecte pas d'argent.
   const impayees = commandes.filter((c) => !c.payment);
   if (impayees.length > 0) {
-    throw new Error(
+    return refus(
       `Encaissez d'abord ${impayees.length > 1 ? "ces commandes" : "cette commande"} avant de la confier à un livreur : ${impayees
         .map((c) => c.reference ?? "sans référence")
         .join(", ")}`,
@@ -65,7 +69,7 @@ export async function assignerLivreur(input: z.infer<typeof assignerSchema>) {
   // Une commande déjà remise au client ne se réaffecte pas.
   const terminees = commandes.filter((c) => c.deliveryStatus === "LIVREE");
   if (terminees.length > 0) {
-    throw new Error(`Commande déjà livrée : ${terminees.map((c) => c.reference).join(", ")}`);
+    return refus(`Commande déjà livrée : ${terminees.map((c) => c.reference).join(", ")}`);
   }
 
   await prisma.order.updateMany({
@@ -81,9 +85,9 @@ export async function retirerLivreur(orderId: string) {
   await requireRole(ROLES_REPARTITION);
 
   const commande = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!commande) throw new Error("Commande introuvable");
+  if (!commande) return refus("Commande introuvable");
   if (commande.deliveryStatus === "LIVREE") {
-    throw new Error("Impossible de retirer le livreur d'une commande déjà livrée");
+    return refus("Impossible de retirer le livreur d'une commande déjà livrée");
   }
 
   await prisma.order.update({
@@ -105,17 +109,20 @@ const avancementSchema = z.object({
  */
 export async function avancerLivraison(input: z.infer<typeof avancementSchema>) {
   const session = await requireRole(["ADMIN", "CAISSIER", "LIVREUR"]);
-  const data = avancementSchema.parse(input);
+
+  const parsed = avancementSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const commande = await prisma.order.findUnique({ where: { id: data.orderId } });
-  if (!commande) throw new Error("Commande introuvable");
-  if (commande.type !== "LIVRAISON") throw new Error("Cette commande n'est pas une livraison");
+  if (!commande) return refus("Commande introuvable");
+  if (commande.type !== "LIVRAISON") return refus("Cette commande n'est pas une livraison");
 
   if (session.user.role === "LIVREUR" && commande.livreurId !== session.user.id) {
     throw new Error("Cette livraison ne vous est pas attribuée");
   }
-  if (!commande.livreurId) throw new Error("Aucun livreur n'est affecté à cette commande");
-  if (commande.deliveryStatus === "LIVREE") throw new Error("Cette commande est déjà livrée");
+  if (!commande.livreurId) return refus("Aucun livreur n'est affecté à cette commande");
+  if (commande.deliveryStatus === "LIVREE") return refus("Cette commande est déjà livrée");
 
   await prisma.order.update({
     where: { id: data.orderId },

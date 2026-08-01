@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 
 async function requireAdmin() {
   const session = await auth();
@@ -24,10 +25,12 @@ const zoneSchema = z.object({
 
 export async function creerZone(input: z.infer<typeof zoneSchema>) {
   await requireAdmin();
-  const data = zoneSchema.parse(input);
+  const parsed = zoneSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existante = await prisma.deliveryZone.findUnique({ where: { name: data.name } });
-  if (existante) throw new Error("Une zone porte déjà ce nom");
+  if (existante) return refus("Une zone porte déjà ce nom");
 
   await prisma.deliveryZone.create({ data });
   revalider();
@@ -35,12 +38,14 @@ export async function creerZone(input: z.infer<typeof zoneSchema>) {
 
 export async function modifierZone(id: string, input: z.infer<typeof zoneSchema>) {
   await requireAdmin();
-  const data = zoneSchema.parse(input);
+  const parsed = zoneSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const doublon = await prisma.deliveryZone.findFirst({
     where: { name: data.name, NOT: { id } },
   });
-  if (doublon) throw new Error("Une zone porte déjà ce nom");
+  if (doublon) return refus("Une zone porte déjà ce nom");
 
   await prisma.deliveryZone.update({ where: { id }, data });
   revalider();
@@ -57,7 +62,7 @@ export async function supprimerZone(id: string) {
 
   const quartiers = await prisma.quartier.count({ where: { zoneId: id } });
   if (quartiers > 0) {
-    throw new Error(
+    return refus(
       "Cette zone contient encore des quartiers. Déplacez-les ou supprimez-les d'abord.",
     );
   }
@@ -73,14 +78,16 @@ const quartierSchema = z.object({
 
 export async function creerQuartier(input: z.infer<typeof quartierSchema>) {
   await requireAdmin();
-  const data = quartierSchema.parse(input);
+  const parsed = quartierSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const zone = await prisma.deliveryZone.findUnique({ where: { id: data.zoneId } });
-  if (!zone) throw new Error("Zone introuvable");
+  if (!zone) return refus("Zone introuvable");
 
   const existant = await prisma.quartier.findUnique({ where: { name: data.name } });
   if (existant) {
-    throw new Error("Ce quartier est déjà rattaché à une zone");
+    return refus("Ce quartier est déjà rattaché à une zone");
   }
 
   await prisma.quartier.create({ data });
@@ -92,7 +99,7 @@ export async function deplacerQuartier(id: string, zoneId: string) {
   await requireAdmin();
 
   const zone = await prisma.deliveryZone.findUnique({ where: { id: zoneId } });
-  if (!zone) throw new Error("Zone introuvable");
+  if (!zone) return refus("Zone introuvable");
 
   await prisma.quartier.update({ where: { id }, data: { zoneId } });
   revalider();
@@ -104,7 +111,7 @@ export async function supprimerQuartier(id: string) {
   // Les commandes gardent leur quartier en référence : le supprimer les casserait.
   const commandes = await prisma.order.count({ where: { quartierId: id } });
   if (commandes > 0) {
-    throw new Error(
+    return refus(
       `Impossible de supprimer : ${commandes} commande(s) ont été livrées dans ce quartier.`,
     );
   }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createOrder, updateOrder, updateOrderStatus, deleteOrder } from "@/lib/actions/orders";
+import { assurerSucces } from "@/lib/actions/resultat";
 import type { DeliveryStatus, OrderStatus, OrderType } from "@/generated/prisma/client";
 import { downloadCsv } from "@/lib/csv";
 import { PriseCommandePhotos } from "./prise-commande-photos";
@@ -178,16 +179,20 @@ export function OrderBoard({
     startTransition(async () => {
       try {
         if (editingOrderId) {
-          await updateOrder({
-            ...communs,
-            orderId: editingOrderId,
-            tableNumber: infos.tableNumber ? Number(infos.tableNumber) : null,
-          });
+          assurerSucces(
+            await updateOrder({
+              ...communs,
+              orderId: editingOrderId,
+              tableNumber: infos.tableNumber ? Number(infos.tableNumber) : null,
+            }),
+          );
         } else {
-          await createOrder({
-            ...communs,
-            tableNumber: infos.tableNumber ? Number(infos.tableNumber) : undefined,
-          });
+          assurerSucces(
+            await createOrder({
+              ...communs,
+              tableNumber: infos.tableNumber ? Number(infos.tableNumber) : undefined,
+            }),
+          );
         }
         setCart({});
         setInfos(INFOS_VIDES);
@@ -202,7 +207,7 @@ export function OrderBoard({
     setError(null);
     startTransition(async () => {
       try {
-        await updateOrderStatus(orderId, status);
+        assurerSucces(await updateOrderStatus(orderId, status));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors du changement de statut");
       }
@@ -214,7 +219,7 @@ export function OrderBoard({
     if (!window.confirm("Supprimer définitivement cette commande ?")) return;
     startTransition(async () => {
       try {
-        await deleteOrder(orderId);
+        assurerSucces(await deleteOrder(orderId));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la suppression");
       }

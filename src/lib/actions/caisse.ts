@@ -4,7 +4,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { assertCaisseAJour } from "@/lib/journee-caisse";
+import { blocageCaisse } from "@/lib/journee-caisse";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import { totalCommande } from "@/lib/total-commande";
 
 async function requireCashier() {
@@ -25,12 +26,14 @@ async function requireAdminOrComptabilite() {
 
 export async function openCashRegister(openingFloat: number) {
   const session = await requireCashier();
-  await assertCaisseAJour(session.user.id, session.user.role);
+
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
 
   const existing = await prisma.cashRegister.findFirst({
     where: { cashierId: session.user.id, status: "OUVERTE" },
   });
-  if (existing) throw new Error("Une caisse est déjà ouverte");
+  if (existing) return refus("Une caisse est déjà ouverte");
 
   await prisma.cashRegister.create({
     data: {
@@ -49,25 +52,30 @@ const payOrderSchema = z.object({
 
 export async function payOrder(input: z.infer<typeof payOrderSchema>) {
   const session = await requireCashier();
-  await assertCaisseAJour(session.user.id, session.user.role);
-  const data = payOrderSchema.parse(input);
+
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
+
+  const parsed = payOrderSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const cashRegister = await prisma.cashRegister.findFirst({
     where: { cashierId: session.user.id, status: "OUVERTE" },
   });
-  if (!cashRegister) throw new Error("Ouvrez votre caisse avant d'encaisser un paiement");
+  if (!cashRegister) return refus("Ouvrez votre caisse avant d'encaisser un paiement");
 
   const order = await prisma.order.findUnique({
     where: { id: data.orderId },
     include: { items: true, payment: true },
   });
-  if (!order) throw new Error("Commande introuvable");
-  if (order.status === "ANNULEE") throw new Error("Impossible d'encaisser une commande annulée");
-  if (order.payment) throw new Error("Cette commande a déjà été payée");
+  if (!order) return refus("Commande introuvable");
+  if (order.status === "ANNULEE") return refus("Impossible d'encaisser une commande annulée");
+  if (order.payment) return refus("Cette commande a déjà été payée");
 
   // Le client règle les articles et, pour une livraison, les frais de la zone.
   const amount = totalCommande(order.items, order.deliveryFee);
-  if (amount <= 0) throw new Error("Le montant de la commande est invalide");
+  if (amount <= 0) return refus("Le montant de la commande est invalide");
 
   await prisma.payment.create({
     data: {
@@ -91,12 +99,15 @@ const closeCashRegisterSchema = z.object({
 
 export async function closeCashRegister(input: z.infer<typeof closeCashRegisterSchema>) {
   const session = await requireCashier();
-  const data = closeCashRegisterSchema.parse(input);
+
+  const parsed = closeCashRegisterSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const cashRegister = await prisma.cashRegister.findFirst({
     where: { cashierId: session.user.id, status: "OUVERTE" },
   });
-  if (!cashRegister) throw new Error("Aucune caisse ouverte");
+  if (!cashRegister) return refus("Aucune caisse ouverte");
 
   const payments = await prisma.payment.findMany({ where: { cashRegisterId: cashRegister.id } });
   const totalCash = payments.filter((p) => p.method === "CASH").reduce((sum, p) => sum + p.amount, 0);
@@ -108,7 +119,7 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
 
   const note = data.note?.trim() ? data.note.trim() : null;
   if (difference !== 0 && !note) {
-    throw new Error("Un écart de caisse a été constaté : indiquez son motif dans la note");
+    return refus("Un écart de caisse a été constaté : indiquez son motif dans la note");
   }
 
   await prisma.cashRegister.update({
@@ -138,11 +149,14 @@ const correctCashRegisterSchema = z.object({
 
 export async function correctCashRegister(input: z.infer<typeof correctCashRegisterSchema>) {
   const session = await requireAdminOrComptabilite();
-  const data = correctCashRegisterSchema.parse(input);
+
+  const parsed = correctCashRegisterSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const cashRegister = await prisma.cashRegister.findUnique({ where: { id: data.id } });
-  if (!cashRegister) throw new Error("Versement introuvable");
-  if (cashRegister.status !== "FERMEE") throw new Error("Seul un versement clôturé peut être corrigé");
+  if (!cashRegister) return refus("Versement introuvable");
+  if (cashRegister.status !== "FERMEE") return refus("Seul un versement clôturé peut être corrigé");
 
   await prisma.cashRegister.update({
     where: { id: data.id },

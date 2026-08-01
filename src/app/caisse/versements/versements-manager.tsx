@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { correctCashRegister } from "@/lib/actions/caisse";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatSignedFCFA } from "@/lib/format";
 import type { CashRegisterStatus } from "@/generated/prisma/client";
@@ -104,11 +105,13 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
     }
     startTransition(async () => {
       try {
-        await correctCashRegister({
-          id,
-          correctedAmount: Number(correctedAmount),
-          correctionNote: correctionNote.trim(),
-        });
+        assurerSucces(
+          await correctCashRegister({
+            id,
+            correctedAmount: Number(correctedAmount),
+            correctionNote: correctionNote.trim(),
+          })
+        );
         cancelCorrection();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la correction");

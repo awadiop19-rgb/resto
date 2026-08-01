@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { assignerLivreur, retirerLivreur } from "@/lib/actions/livraison";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { formatFCFA } from "@/lib/format";
 import {
   DELIVERY_CLASSES,
@@ -87,10 +88,12 @@ export function LivraisonsManager({
     }
     startTransition(async () => {
       try {
-        const nombre = await assignerLivreur({
-          orderIds: Array.from(selection),
-          livreurId: livreurChoisi,
-        });
+        const nombre = assurerSucces(
+          await assignerLivreur({
+            orderIds: Array.from(selection),
+            livreurId: livreurChoisi,
+          }),
+        );
         const nom = livreurs.find((l) => l.id === livreurChoisi)?.name ?? "le livreur";
         setSucces(`${nombre} commande(s) confiée(s) à ${nom}.`);
         setSelection(new Set());
@@ -106,7 +109,7 @@ export function LivraisonsManager({
     setSucces(null);
     startTransition(async () => {
       try {
-        await retirerLivreur(id);
+        assurerSucces(await retirerLivreur(id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors du retrait du livreur");
       }

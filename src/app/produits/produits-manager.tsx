@@ -7,6 +7,7 @@ import {
   toggleProductActive,
   updateProduct,
 } from "@/lib/actions/stock";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { CATEGORIES_PRODUIT, UNITES, formatQuantite } from "@/lib/stock";
 import type { StockUnit } from "@/generated/prisma/client";
 
@@ -45,11 +46,13 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Formulaire>(VIDE);
 
-  function run(action: () => Promise<void>, apres?: () => void) {
+  // `unknown` plutôt que `void` : les actions renvoient désormais un refus
+  // éventuel, converti ici en erreur pour le `catch` ci-dessous.
+  function run(action: () => Promise<unknown>, apres?: () => void) {
     setError(null);
     startTransition(async () => {
       try {
-        await action();
+        assurerSucces(await action());
         apres?.();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Opération impossible");

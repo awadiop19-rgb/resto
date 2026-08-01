@@ -74,10 +74,13 @@ export function messageBlocage(caisses: { jourLabel: string }[]) {
 /**
  * Barrière serveur : un caissier en retard de clôture ne peut plus travailler.
  * Seule la clôture de la caisse en retard reste possible.
+ *
+ * Renvoie le motif du blocage, ou `null` si la voie est libre. Un message rendu
+ * plutôt que levé : voir `@/lib/actions/resultat`.
  */
-export async function assertCaisseAJour(userId: string, role: Role) {
-  if (!peutTenirUneCaisse(role)) return;
+export async function blocageCaisse(userId: string, role: Role) {
+  if (!peutTenirUneCaisse(role)) return null;
 
   const retard = await getCaissesNonFermees(userId);
-  if (retard.length > 0) throw new Error(messageBlocage(retard));
+  return retard.length > 0 ? messageBlocage(retard) : null;
 }

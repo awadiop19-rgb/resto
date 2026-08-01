@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { enregistrerMouvement } from "@/lib/actions/stock";
 import { formatFCFA } from "@/lib/format";
 import { TYPES_MOUVEMENT, formatQuantite, uniteCourte } from "@/lib/stock";
@@ -59,16 +60,18 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
 
     startTransition(async () => {
       try {
-        await enregistrerMouvement({
-          productId,
-          type,
-          quantity: Number(quantity),
-          sensNegatif: type === "AJUSTEMENT" ? sensNegatif : undefined,
-          unitPrice: type === "ACHAT" ? Number(unitPrice) : undefined,
-          supplier: supplier || undefined,
-          note: note || undefined,
-          date,
-        });
+        assurerSucces(
+          await enregistrerMouvement({
+            productId,
+            type,
+            quantity: Number(quantity),
+            sensNegatif: type === "AJUSTEMENT" ? sensNegatif : undefined,
+            unitPrice: type === "ACHAT" ? Number(unitPrice) : undefined,
+            supplier: supplier || undefined,
+            note: note || undefined,
+            date,
+          })
+        );
         setSucces(
           `${produit?.name} : mouvement enregistré${type === "ACHAT" ? " et passé en dépense" : ""}.`
         );

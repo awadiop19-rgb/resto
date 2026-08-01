@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { normaliserReference } from "@/lib/reference-commande";
@@ -19,16 +20,18 @@ const declarationSchema = z.object({
  * fausse déclaration ne fait donc entrer aucune commande dans le circuit.
  */
 export async function declarerPaiementWave(input: z.infer<typeof declarationSchema>) {
-  const data = declarationSchema.parse(input);
+  const parsed = declarationSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
   const reference = normaliserReference(data.reference);
 
   const commande = await prisma.order.findUnique({
     where: { reference },
     select: { id: true, payment: { select: { id: true } }, status: true },
   });
-  if (!commande) throw new Error("Commande introuvable");
-  if (commande.status === "ANNULEE") throw new Error("Cette commande a été annulée");
-  if (commande.payment) throw new Error("Cette commande est déjà réglée");
+  if (!commande) return refus("Commande introuvable");
+  if (commande.status === "ANNULEE") return refus("Cette commande a été annulée");
+  if (commande.payment) return refus("Cette commande est déjà réglée");
 
   await prisma.order.update({
     where: { id: commande.id },

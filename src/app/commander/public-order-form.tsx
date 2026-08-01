@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createPublicOrder } from "@/lib/actions/orders";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { SelecteurQuartier } from "@/components/selecteur-quartier";
 import { PaiementWave } from "@/components/paiement-wave";
 import type { QuartierOption } from "@/lib/quartiers";
@@ -98,15 +99,18 @@ export function PublicOrderForm({
 
     startTransition(async () => {
       try {
-        const nouvelleReference = await createPublicOrder({
-          customerName: name.trim(),
-          customerPhone: phone.trim(),
-          type: mode,
-          quartierId: mode === "LIVRAISON" ? quartierId : undefined,
-          deliveryAddress: mode === "LIVRAISON" ? address.trim() : undefined,
-          deliveryNote: mode === "LIVRAISON" && deliveryNote.trim() ? deliveryNote.trim() : undefined,
-          items,
-        });
+        const nouvelleReference = assurerSucces(
+          await createPublicOrder({
+            customerName: name.trim(),
+            customerPhone: phone.trim(),
+            type: mode,
+            quartierId: mode === "LIVRAISON" ? quartierId : undefined,
+            deliveryAddress: mode === "LIVRAISON" ? address.trim() : undefined,
+            deliveryNote:
+              mode === "LIVRAISON" && deliveryNote.trim() ? deliveryNote.trim() : undefined,
+            items,
+          }),
+        );
         setReference(nouvelleReference);
         setMontantDu(totalAPayer);
         setCart({});

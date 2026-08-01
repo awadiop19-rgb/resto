@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createExpense, deleteExpense } from "@/lib/actions/expenses";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 
 type Expense = {
@@ -47,7 +48,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await deleteExpense(id);
+        assurerSucces(await deleteExpense(id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Suppression impossible");
       }
@@ -62,12 +63,14 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     }
     startTransition(async () => {
       try {
-        await createExpense({
-          label: form.label,
-          amount: Number(form.amount),
-          category: form.category,
-          date: form.date,
-        });
+        assurerSucces(
+          await createExpense({
+            label: form.label,
+            amount: Number(form.amount),
+            category: form.category,
+            date: form.date,
+          })
+        );
         setForm({ label: "", amount: "", category: CATEGORIES[0], date: new Date().toISOString().slice(0, 10) });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de l'ajout");

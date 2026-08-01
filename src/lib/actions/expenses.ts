@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -18,7 +19,9 @@ export async function createExpense(input: z.infer<typeof expenseSchema>) {
     throw new Error("Non autorisé");
   }
 
-  const data = expenseSchema.parse(input);
+  const parsed = expenseSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   await prisma.expense.create({
     data: {
@@ -44,7 +47,7 @@ export async function deleteExpense(id: string) {
   // supprimer seule laisserait l'entrée en stock sans charge en face.
   const liee = await prisma.stockMovement.findFirst({ where: { expenseId: id } });
   if (liee) {
-    throw new Error(
+    return refus(
       "Cette dépense provient d'un achat de stock. Supprimez le mouvement depuis la page Stock."
     );
   }

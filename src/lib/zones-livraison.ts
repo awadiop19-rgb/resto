@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { refus } from "@/lib/actions/resultat";
 import type { QuartierOption } from "@/lib/quartiers";
 
 // Accès base uniquement : les helpers réutilisés côté navigateur vivent dans
@@ -27,15 +28,19 @@ export async function getQuartiersLivrables(): Promise<QuartierOption[]> {
 /**
  * Tarif applicable à un quartier, lu en base au moment de la commande.
  * Le montant retourné est ensuite figé sur la commande.
+ *
+ * Rend un refus plutôt que de le lever : ces deux motifs s'adressent au client
+ * qui commande, et un message levé serait masqué en production
+ * (voir `@/lib/actions/resultat`).
  */
 export async function tarifDuQuartier(quartierId: string) {
   const quartier = await prisma.quartier.findUnique({
     where: { id: quartierId },
     include: { zone: true },
   });
-  if (!quartier) throw new Error("Quartier introuvable");
+  if (!quartier) return refus("Quartier introuvable");
   if (!quartier.zone.active) {
-    throw new Error(`Nous ne livrons pas actuellement à ${quartier.name}`);
+    return refus(`Nous ne livrons pas actuellement à ${quartier.name}`);
   }
   return { fee: quartier.zone.fee, quartier };
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import type { Role } from "@/generated/prisma/client";
 
 async function requireAdmin() {
@@ -17,13 +18,14 @@ async function requireAdmin() {
 // ce qui laisserait l'application sans compte capable de la gérer.
 async function assertNotLastActiveAdmin(id: string) {
   const target = await prisma.user.findUnique({ where: { id } });
-  if (!target) throw new Error("Utilisateur introuvable");
+  if (!target) return refus("Utilisateur introuvable");
   if (target.role === "ADMIN" && target.active) {
     const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", active: true } });
     if (activeAdmins <= 1) {
-      throw new Error("Impossible : il doit rester au moins un administrateur actif");
+      return refus("Impossible : il doit rester au moins un administrateur actif");
     }
   }
+  return null;
 }
 
 const createUserSchema = z.object({
@@ -35,10 +37,12 @@ const createUserSchema = z.object({
 
 export async function createUser(input: z.infer<typeof createUserSchema>) {
   await requireAdmin();
-  const data = createUserSchema.parse(input);
+  const parsed = createUserSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
-  if (existing) throw new Error("Cet email est déjà utilisé");
+  if (existing) return refus("Cet email est déjà utilisé");
 
   const hashed = await bcrypt.hash(data.password, 10);
   await prisma.user.create({
@@ -56,12 +60,14 @@ const updateUserSchema = z.object({
 
 export async function updateUser(input: z.infer<typeof updateUserSchema>) {
   await requireAdmin();
-  const data = updateUserSchema.parse(input);
+  const parsed = updateUserSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existing = await prisma.user.findFirst({
     where: { email: data.email, NOT: { id: data.id } },
   });
-  if (existing) throw new Error("Cet email est déjà utilisé");
+  if (existing) return refus("Cet email est déjà utilisé");
 
   await prisma.user.update({ where: { id: data.id }, data: { name: data.name, email: data.email } });
   revalidatePath("/utilisateurs");
@@ -69,9 +75,10 @@ export async function updateUser(input: z.infer<typeof updateUserSchema>) {
 
 export async function updateUserRole(id: string, role: Role) {
   const session = await requireAdmin();
-  if (session.user.id === id) throw new Error("Vous ne pouvez pas modifier votre propre rôle");
+  if (session.user.id === id) return refus("Vous ne pouvez pas modifier votre propre rôle");
   if (role !== "ADMIN") {
-    await assertNotLastActiveAdmin(id);
+    const blocage = await assertNotLastActiveAdmin(id);
+    if (blocage) return blocage;
   }
 
   await prisma.user.update({ where: { id }, data: { role } });
@@ -85,7 +92,9 @@ const resetPasswordSchema = z.object({
 
 export async function resetUserPassword(input: z.infer<typeof resetPasswordSchema>) {
   await requireAdmin();
-  const data = resetPasswordSchema.parse(input);
+  const parsed = resetPasswordSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const hashed = await bcrypt.hash(data.password, 10);
   await prisma.user.update({ where: { id: data.id }, data: { password: hashed } });
@@ -94,9 +103,10 @@ export async function resetUserPassword(input: z.infer<typeof resetPasswordSchem
 
 export async function setUserActive(id: string, active: boolean) {
   const session = await requireAdmin();
-  if (session.user.id === id) throw new Error("Vous ne pouvez pas désactiver votre propre compte");
+  if (session.user.id === id) return refus("Vous ne pouvez pas désactiver votre propre compte");
   if (!active) {
-    await assertNotLastActiveAdmin(id);
+    const blocage = await assertNotLastActiveAdmin(id);
+    if (blocage) return blocage;
   }
 
   await prisma.user.update({ where: { id }, data: { active } });
@@ -105,8 +115,9 @@ export async function setUserActive(id: string, active: boolean) {
 
 export async function deleteUser(id: string) {
   const session = await requireAdmin();
-  if (session.user.id === id) throw new Error("Vous ne pouvez pas supprimer votre propre compte");
-  await assertNotLastActiveAdmin(id);
+  if (session.user.id === id) return refus("Vous ne pouvez pas supprimer votre propre compte");
+  const blocage = await assertNotLastActiveAdmin(id);
+  if (blocage) return blocage;
 
   const [orders, expenses, payments, cashRegisters, corrections] = await Promise.all([
     prisma.order.count({ where: { userId: id } }),
@@ -116,7 +127,7 @@ export async function deleteUser(id: string) {
     prisma.cashRegister.count({ where: { correctedById: id } }),
   ]);
   if (orders + expenses + payments + cashRegisters + corrections > 0) {
-    throw new Error(
+    return refus(
       "Impossible de supprimer : cet utilisateur a des données liées (commandes, dépenses, paiements ou caisses). Désactivez-le plutôt.",
     );
   }

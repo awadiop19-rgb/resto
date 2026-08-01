@@ -9,6 +9,7 @@ import {
   toggleAvailability,
   updateMenuItem,
 } from "@/lib/actions/menu";
+import { assurerSucces } from "@/lib/actions/resultat";
 
 type MenuItem = {
   id: string;
@@ -36,11 +37,23 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
     setError(e instanceof Error ? e.message : "Une erreur est survenue");
   }
 
+  /** Actions déclenchées d'un seul clic : leur refus doit s'afficher, pas se perdre. */
+  function lancer(action: () => Promise<unknown>) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        assurerSucces(await action());
+      } catch (e) {
+        handleError(e);
+      }
+    });
+  }
+
   function addCategory() {
     setError(null);
     startTransition(async () => {
       try {
-        await createCategory(newCategory);
+        assurerSucces(await createCategory(newCategory));
         setNewCategory("");
       } catch (e) {
         handleError(e);
@@ -57,13 +70,15 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
     }
     startTransition(async () => {
       try {
-        await createMenuItem({
-          name: draft.name,
-          description: draft.description || undefined,
-          price: Number(draft.price),
-          categoryId,
-          available: true,
-        });
+        assurerSucces(
+          await createMenuItem({
+            name: draft.name,
+            description: draft.description || undefined,
+            price: Number(draft.price),
+            categoryId,
+            available: true,
+          })
+        );
         setNewItem((prev) => ({ ...prev, [categoryId]: { name: "", price: "", description: "" } }));
       } catch (e) {
         handleError(e);
@@ -79,13 +94,15 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
   function saveEdit(item: MenuItem) {
     startTransition(async () => {
       try {
-        await updateMenuItem(item.id, {
-          name: editValues.name,
-          description: editValues.description || undefined,
-          price: Number(editValues.price),
-          categoryId: item.categoryId,
-          available: item.available,
-        });
+        assurerSucces(
+          await updateMenuItem(item.id, {
+            name: editValues.name,
+            description: editValues.description || undefined,
+            price: Number(editValues.price),
+            categoryId: item.categoryId,
+            available: item.available,
+          })
+        );
         setEditingId(null);
       } catch (e) {
         handleError(e);
@@ -124,7 +141,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
             <h2 className="font-semibold">{category.name}</h2>
             {isAdmin && (
               <button
-                onClick={() => startTransition(() => deleteCategory(category.id))}
+                onClick={() => lancer(() => deleteCategory(category.id))}
                 className="text-xs text-red-600 hover:underline"
               >
                 Supprimer la catégorie
@@ -183,7 +200,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
                         {isAdmin ? (
                           <button
                             onClick={() =>
-                              startTransition(() => toggleAvailability(item.id, !item.available))
+                              lancer(() => toggleAvailability(item.id, !item.available))
                             }
                             className={`rounded-full px-2 py-0.5 text-xs ${
                               item.available
@@ -211,7 +228,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
                             Modifier
                           </button>
                           <button
-                            onClick={() => startTransition(() => deleteMenuItem(item.id))}
+                            onClick={() => lancer(() => deleteMenuItem(item.id))}
                             className="text-red-600 hover:underline"
                           >
                             Supprimer

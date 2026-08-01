@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import { formatQuantite } from "@/lib/stock";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -36,10 +37,12 @@ export type ProductInput = z.infer<typeof productSchema>;
 
 export async function createProduct(input: ProductInput) {
   await requireComptable();
-  const data = productSchema.parse(input);
+  const parsed = productSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existant = await prisma.product.findUnique({ where: { name: data.name } });
-  if (existant) throw new Error(`Le produit « ${data.name} » existe déjà`);
+  if (existant) return refus(`Le produit « ${data.name} » existe déjà`);
 
   await prisma.product.create({ data });
   revalider();
@@ -47,19 +50,21 @@ export async function createProduct(input: ProductInput) {
 
 export async function updateProduct(id: string, input: ProductInput) {
   await requireComptable();
-  const data = productSchema.parse(input);
+  const parsed = productSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const homonyme = await prisma.product.findUnique({ where: { name: data.name } });
-  if (homonyme && homonyme.id !== id) throw new Error(`Le produit « ${data.name} » existe déjà`);
+  if (homonyme && homonyme.id !== id) return refus(`Le produit « ${data.name} » existe déjà`);
 
   // L'unité fixe le sens de tous les mouvements déjà enregistrés : la changer
   // transformerait 3 litres en 3 kilos dans l'historique.
   const produit = await prisma.product.findUnique({ where: { id } });
-  if (!produit) throw new Error("Produit introuvable");
+  if (!produit) return refus("Produit introuvable");
   if (produit.unit !== data.unit) {
     const mouvements = await prisma.stockMovement.count({ where: { productId: id } });
     if (mouvements > 0) {
-      throw new Error(
+      return refus(
         "Impossible de changer l'unité d'un produit qui a déjà des mouvements. Créez un nouveau produit."
       );
     }
@@ -81,7 +86,7 @@ export async function deleteProduct(id: string) {
   // Supprimer un produit mouvementé effacerait des achats déjà comptabilisés.
   const mouvements = await prisma.stockMovement.count({ where: { productId: id } });
   if (mouvements > 0) {
-    throw new Error(
+    return refus(
       `Ce produit a ${mouvements} mouvement(s) enregistré(s). Désactivez-le plutôt que de le supprimer.`
     );
   }
@@ -114,16 +119,18 @@ export type MouvementInput = z.infer<typeof mouvementSchema>;
  */
 export async function enregistrerMouvement(input: MouvementInput) {
   const session = await requireComptable();
-  const data = mouvementSchema.parse(input);
+  const parsed = mouvementSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const produit = await prisma.product.findUnique({ where: { id: data.productId } });
-  if (!produit) throw new Error("Produit introuvable");
+  if (!produit) return refus("Produit introuvable");
   if (!produit.active && data.type !== "AJUSTEMENT") {
-    throw new Error(`Le produit « ${produit.name} » est désactivé`);
+    return refus(`Le produit « ${produit.name} » est désactivé`);
   }
 
   if (data.type === "ACHAT" && (data.unitPrice == null || data.unitPrice <= 0)) {
-    throw new Error("Le prix unitaire d'achat est requis");
+    return refus("Le prix unitaire d'achat est requis");
   }
 
   const delta =
@@ -144,7 +151,7 @@ export async function enregistrerMouvement(input: MouvementInput) {
     });
     const stock = solde._sum.quantity ?? 0;
     if (stock + delta < 0) {
-      throw new Error(
+      return refus(
         `Stock insuffisant : il reste ${formatQuantite(stock, produit.unit)} de ${produit.name}. ` +
           `Corrigez d'abord par un ajustement d'inventaire.`
       );
@@ -193,7 +200,7 @@ export async function supprimerMouvement(id: string) {
     where: { id },
     include: { product: true },
   });
-  if (!mouvement) throw new Error("Mouvement introuvable");
+  if (!mouvement) return refus("Mouvement introuvable");
 
   // Retirer une entrée déjà consommée rendrait le solde négatif : l'historique
   // décrirait alors un stock qui n'a jamais pu exister.
@@ -203,7 +210,7 @@ export async function supprimerMouvement(id: string) {
       _sum: { quantity: true },
     });
     if ((solde._sum.quantity ?? 0) - mouvement.quantity < 0) {
-      throw new Error(
+      return refus(
         `Cette entrée a déjà été consommée : la supprimer rendrait le stock de ${mouvement.product.name} négatif.`
       );
     }

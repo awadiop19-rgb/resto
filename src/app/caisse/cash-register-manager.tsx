@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { openCashRegister, payOrder } from "@/lib/actions/caisse";
+import { assurerSucces } from "@/lib/actions/resultat";
 import type { PaymentMethod } from "@/generated/prisma/client";
 import { CHART } from "@/lib/chart-theme";
 import { formatFCFA } from "@/lib/format";
@@ -62,6 +63,7 @@ export function CashRegisterManager({
   const [error, setError] = useState<string | null>(null);
   const [openingFloat, setOpeningFloat] = useState("0");
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const ouvertureRef = useRef<HTMLDivElement>(null);
 
   const totalCash = cashRegister?.payments.filter((p) => p.method === "CASH").reduce((s, p) => s + p.amount, 0) ?? 0;
   const totalWave = cashRegister?.payments.filter((p) => p.method === "WAVE").reduce((s, p) => s + p.amount, 0) ?? 0;
@@ -75,11 +77,17 @@ export function CashRegisterManager({
   );
   const dejaEncaisse = paidOrders.reduce((s, order) => s + order.amount, 0);
 
+  // Un bouton désactivé sans explication laisse le caissier deviner : l'infobulle
+  // dit pourquoi, la bannière au-dessus dit quoi faire.
+  const caisseFermeeMessage = cashRegister
+    ? undefined
+    : "Ouvrez votre caisse avant d'encaisser un paiement";
+
   function handleOpen() {
     setError(null);
     startTransition(async () => {
       try {
-        await openCashRegister(Number(openingFloat) || 0);
+        assurerSucces(await openCashRegister(Number(openingFloat) || 0));
         setOpeningFloat("0");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de l'ouverture de la caisse");
@@ -89,10 +97,17 @@ export function CashRegisterManager({
 
   function handlePay(orderId: string, method: "CASH" | "WAVE") {
     setError(null);
+    // Deuxième barrière, après le serveur : sans caisse ouverte, aucun
+    // encaissement ne part, et le caissier est renvoyé vers l'ouverture.
+    if (!cashRegister) {
+      setError("Ouvrez votre caisse avant d'encaisser un paiement");
+      ouvertureRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     setPayingOrderId(orderId);
     startTransition(async () => {
       try {
-        await payOrder({ orderId, method });
+        assurerSucces(await payOrder({ orderId, method }));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de l'encaissement");
       } finally {
@@ -106,10 +121,11 @@ export function CashRegisterManager({
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {!cashRegister ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 font-semibold">Ouvrir la caisse</h2>
-          <p className="mb-3 text-sm text-slate-500">
-            Vous devez ouvrir votre caisse avant de pouvoir encaisser des paiements.
+        <div ref={ouvertureRef} className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <h2 className="mb-3 font-semibold text-[#8a5900]">Ouvrir la caisse</h2>
+          <p className="mb-3 text-sm text-[#8a5900]">
+            Votre journée n&apos;est pas ouverte. Tant qu&apos;elle ne l&apos;est pas, aucun
+            encaissement n&apos;est possible : indiquez votre fond de caisse pour démarrer.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm text-slate-600" htmlFor="openingFloat">
@@ -183,6 +199,11 @@ export function CashRegisterManager({
             </span>
           )}
         </div>
+        {!cashRegister && unpaidOrders.length > 0 && (
+          <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-[#8a5900]">
+            Encaissement suspendu : ouvrez d&apos;abord votre journée de caisse ci-dessus.
+          </p>
+        )}
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -228,16 +249,18 @@ export function CashRegisterManager({
                   <td className="py-2 pr-2 text-right">
                     <div className="flex justify-end gap-2">
                       <button
-                        disabled={isPending}
+                        disabled={isPending || !cashRegister}
+                        title={caisseFermeeMessage}
                         onClick={() => handlePay(order.id, "CASH")}
-                        className="rounded-md bg-emerald-600 px-3 py-1 text-xs text-white hover:bg-emerald-700 disabled:opacity-50"
+                        className="rounded-md bg-emerald-600 px-3 py-1 text-xs text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isPayingThis ? "..." : "Payer Cash"}
                       </button>
                       <button
-                        disabled={isPending}
+                        disabled={isPending || !cashRegister}
+                        title={caisseFermeeMessage}
                         onClick={() => handlePay(order.id, "WAVE")}
-                        className="rounded-md bg-sky-600 px-3 py-1 text-xs text-white hover:bg-sky-700 disabled:opacity-50"
+                        className="rounded-md bg-sky-600 px-3 py-1 text-xs text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isPayingThis ? "..." : "Payer Wave"}
                       </button>

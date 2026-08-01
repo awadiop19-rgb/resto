@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { avancerLivraison } from "@/lib/actions/livraison";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { formatFCFA } from "@/lib/format";
 import { DELIVERY_CLASSES, DELIVERY_LABELS } from "@/lib/libelles-commande";
 import type { DeliveryStatus } from "@/generated/prisma/client";
@@ -47,7 +48,7 @@ export function MesLivraisons({
     setEnCoursId(id);
     startTransition(async () => {
       try {
-        await avancerLivraison({ orderId: id, statut });
+        assurerSucces(await avancerLivraison({ orderId: id, statut }));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la mise à jour");
       } finally {

@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { OrderStatus, Role } from "@/generated/prisma/client";
-import { assertCaisseAJour } from "@/lib/journee-caisse";
+import { blocageCaisse } from "@/lib/journee-caisse";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 import { genererReference } from "@/lib/reference-commande";
 import { tarifDuQuartier } from "@/lib/zones-livraison";
 
@@ -15,9 +16,10 @@ import { tarifDuQuartier } from "@/lib/zones-livraison";
  */
 async function resoudreLivraison(type: string, quartierId: string | undefined) {
   if (type !== "LIVRAISON") return { quartierId: null, deliveryFee: null };
-  if (!quartierId) throw new Error("Choisissez le quartier de livraison");
-  const { fee } = await tarifDuQuartier(quartierId);
-  return { quartierId, deliveryFee: fee };
+  if (!quartierId) return refus("Choisissez le quartier de livraison");
+  const tarif = await tarifDuQuartier(quartierId);
+  if ("erreur" in tarif) return tarif;
+  return { quartierId, deliveryFee: tarif.fee };
 }
 
 /** Deux références tirées au hasard peuvent coïncider : on retente au lieu d'échouer. */
@@ -65,16 +67,6 @@ async function requireRole(roles: Role[]) {
   return session;
 }
 
-/**
- * Actions de service courant : interdites tant qu'une caisse d'une journée
- * antérieure n'est pas clôturée.
- */
-async function requireRoleEnService(roles: Role[]) {
-  const session = await requireRole(roles);
-  await assertCaisseAJour(session.user.id, session.user.role);
-  return session;
-}
-
 const orderItemSchema = z.object({
   menuItemId: z.string(),
   quantity: z.number().int().min(1),
@@ -95,17 +87,24 @@ const createOrderSchema = z
   .refine(livraisonRenseignee, MESSAGE_LIVRAISON);
 
 export async function createOrder(input: z.infer<typeof createOrderSchema>) {
-  const session = await requireRoleEnService(ROLES_PRISE_COMMANDE);
+  const session = await requireRole(ROLES_PRISE_COMMANDE);
 
-  const data = createOrderSchema.parse(input);
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
+
+  const parsed = createOrderSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const menuItems = await prisma.menuItem.findMany({
     where: { id: { in: data.items.map((item) => item.menuItemId) } },
   });
 
+  const manquant = data.items.find((item) => !menuItems.some((m) => m.id === item.menuItemId));
+  if (manquant) return refus("Article du menu introuvable");
+
   const lignes = data.items.map((item) => {
-    const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-    if (!menuItem) throw new Error("Article du menu introuvable");
+    const menuItem = menuItems.find((m) => m.id === item.menuItemId)!;
     return {
       menuItemId: item.menuItemId,
       quantity: item.quantity,
@@ -115,6 +114,7 @@ export async function createOrder(input: z.infer<typeof createOrderSchema>) {
   });
 
   const livraison = await resoudreLivraison(data.type, data.quartierId);
+  if ("erreur" in livraison) return livraison;
 
   const commande = await avecReferenceUnique((reference) =>
     prisma.order.create({
@@ -164,7 +164,9 @@ const publicOrderSchema = z
   );
 
 export async function createPublicOrder(input: z.infer<typeof publicOrderSchema>) {
-  const data = publicOrderSchema.parse(input);
+  const parsed = publicOrderSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const ids = data.items.map((item) => item.menuItemId);
   const menuItems = await prisma.menuItem.findMany({
@@ -172,10 +174,11 @@ export async function createPublicOrder(input: z.infer<typeof publicOrderSchema>
   });
 
   if (menuItems.length !== new Set(ids).size) {
-    throw new Error("Un ou plusieurs articles ne sont plus disponibles");
+    return refus("Un ou plusieurs articles ne sont plus disponibles");
   }
 
   const livraison = await resoudreLivraison(data.type, data.quartierId);
+  if ("erreur" in livraison) return livraison;
 
   const order = await avecReferenceUnique((reference) =>
     prisma.order.create({
@@ -227,28 +230,37 @@ const updateOrderSchema = z
   .refine(livraisonRenseignee, MESSAGE_LIVRAISON);
 
 export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
-  await requireRoleEnService(ROLES_PRISE_COMMANDE);
+  const session = await requireRole(ROLES_PRISE_COMMANDE);
 
-  const data = updateOrderSchema.parse(input);
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
+
+  const parsed = updateOrderSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existing = await prisma.order.findUnique({
     where: { id: data.orderId },
     include: { payment: true },
   });
-  if (!existing) throw new Error("Commande introuvable");
+  if (!existing) return refus("Commande introuvable");
   if (existing.status === "SERVIE" || existing.status === "ANNULEE") {
-    throw new Error("Impossible de modifier une commande servie ou annulée");
+    return refus("Impossible de modifier une commande servie ou annulée");
   }
   // Le paiement fige un montant : modifier les articles après coup fausserait la caisse.
   if (existing.payment) {
-    throw new Error("Impossible de modifier une commande déjà encaissée");
+    return refus("Impossible de modifier une commande déjà encaissée");
   }
 
   const menuItems = await prisma.menuItem.findMany({
     where: { id: { in: data.items.map((item) => item.menuItemId) } },
   });
 
+  const manquant = data.items.find((item) => !menuItems.some((m) => m.id === item.menuItemId));
+  if (manquant) return refus("Article du menu introuvable");
+
   const livraison = await resoudreLivraison(data.type, data.quartierId);
+  if ("erreur" in livraison) return livraison;
 
   await prisma.$transaction([
     prisma.orderItem.deleteMany({ where: { orderId: data.orderId } }),
@@ -270,8 +282,7 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
         deliveryFee: livraison.deliveryFee,
         items: {
           create: data.items.map((item) => {
-            const menuItem = menuItems.find((m) => m.id === item.menuItemId);
-            if (!menuItem) throw new Error("Article du menu introuvable");
+            const menuItem = menuItems.find((m) => m.id === item.menuItemId)!;
             return {
               menuItemId: item.menuItemId,
               quantity: item.quantity,
@@ -289,11 +300,14 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
-  await requireRoleEnService(ROLES_SUIVI_COMMANDE);
+  const session = await requireRole(ROLES_SUIVI_COMMANDE);
+
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
 
   if (status === "ANNULEE") {
     const payment = await prisma.payment.findUnique({ where: { orderId } });
-    if (payment) throw new Error("Impossible d'annuler une commande déjà encaissée");
+    if (payment) return refus("Impossible d'annuler une commande déjà encaissée");
   }
 
   await prisma.order.update({ where: { id: orderId }, data: { status } });
@@ -305,7 +319,7 @@ export async function deleteOrder(orderId: string) {
   await requireRole(["ADMIN"]);
 
   const payment = await prisma.payment.findUnique({ where: { orderId } });
-  if (payment) throw new Error("Impossible de supprimer une commande déjà encaissée");
+  if (payment) return refus("Impossible de supprimer une commande déjà encaissée");
 
   await prisma.order.delete({ where: { id: orderId } });
   revalidatePath("/commandes");

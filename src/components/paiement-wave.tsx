@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { declarerPaiementWave } from "@/lib/actions/paiement";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { formatFCFA } from "@/lib/format";
 import { WAVE_LIEN_PAIEMENT, WAVE_QR_IMAGE } from "@/lib/wave";
 
@@ -29,7 +30,7 @@ export function PaiementWave({
     setError(null);
     startTransition(async () => {
       try {
-        await declarerPaiementWave({ reference, waveReference });
+        assurerSucces(await declarerPaiementWave({ reference, waveReference }));
         setDeclare(true);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur, merci de réessayer.");

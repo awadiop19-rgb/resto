@@ -9,6 +9,7 @@ import {
   updateUser,
   updateUserRole,
 } from "@/lib/actions/users";
+import { assurerSucces } from "@/lib/actions/resultat";
 import type { Role } from "@/generated/prisma/client";
 
 type User = { id: string; name: string; email: string; role: Role; active: boolean };
@@ -67,7 +68,9 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     }
     startTransition(async () => {
       try {
-        await createUser({ name: form.name, email: form.email, password: form.password, role: form.role });
+        assurerSucces(
+          await createUser({ name: form.name, email: form.email, password: form.password, role: form.role })
+        );
         setForm({ name: "", email: "", password: "", confirmPassword: "", role: "SERVEUR" });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la création");
@@ -79,7 +82,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     setError(null);
     startTransition(async () => {
       try {
-        await updateUserRole(id, role);
+        assurerSucces(await updateUserRole(id, role));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors du changement de rôle");
       }
@@ -91,7 +94,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     if (user.active && !window.confirm(`Désactiver le compte de ${user.name} ?`)) return;
     startTransition(async () => {
       try {
-        await setUserActive(user.id, !user.active);
+        assurerSucces(await setUserActive(user.id, !user.active));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors du changement de statut");
       }
@@ -117,7 +120,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     }
     startTransition(async () => {
       try {
-        await updateUser({ id, name: editForm.name.trim(), email: editForm.email.trim() });
+        assurerSucces(await updateUser({ id, name: editForm.name.trim(), email: editForm.email.trim() }));
         cancelEdit();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la modification");
@@ -148,7 +151,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     }
     startTransition(async () => {
       try {
-        await resetUserPassword({ id, password: resetForm.password });
+        assurerSucces(await resetUserPassword({ id, password: resetForm.password }));
         cancelReset();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la réinitialisation");
@@ -161,7 +164,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     if (!window.confirm(`Supprimer définitivement le compte de ${name} ?`)) return;
     startTransition(async () => {
       try {
-        await deleteUser(id);
+        assurerSucces(await deleteUser(id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de la suppression");
       }

@@ -15,6 +15,7 @@ import { ChartCard } from "@/components/chart-card";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import { downloadCsv } from "@/lib/csv";
 import { formatFCFA } from "@/lib/format";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { supprimerMouvement } from "@/lib/actions/stock";
 import { formatQuantite, formatQuantiteSignee, libelleType } from "@/lib/stock";
 import type { StockData } from "@/lib/stock-data";
@@ -37,7 +38,7 @@ export function VoletMouvements({ data }: { data: StockData }) {
     setError(null);
     startTransition(async () => {
       try {
-        await supprimerMouvement(id);
+        assurerSucces(await supprimerMouvement(id));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Suppression impossible");
       }

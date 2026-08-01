@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { closeCashRegister } from "@/lib/actions/caisse";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 
 /**
@@ -52,7 +53,7 @@ export function FermetureCaisseForm({
     }
     startTransition(async () => {
       try {
-        await closeCashRegister({ declaredAmount: declaredNumber, note: closeNote });
+        assurerSucces(await closeCashRegister({ declaredAmount: declaredNumber, note: closeNote }));
         setDeclaredAmount("");
         setCloseNote("");
         onClosed?.();

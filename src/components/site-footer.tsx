@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function SiteFooter() {
   return (
     <footer id="contact" className="border-t border-black/10 bg-black text-neutral-300">
@@ -20,6 +22,12 @@ export function SiteFooter() {
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Contact</p>
           <p className="mt-2 text-sm">+221 71 150 81 22</p>
           <p className="mt-1 text-sm">contact@saveuramir.sn</p>
+          <Link
+            href="/suivi"
+            className="mt-3 inline-block text-sm text-orange-400 underline-offset-4 transition hover:text-orange-300 hover:underline"
+          >
+            Suivre ma commande
+          </Link>
         </div>
       </div>
       <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-neutral-500">

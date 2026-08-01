@@ -3,6 +3,7 @@ import Link from "next/link";
 const links = [
   { href: "/", label: "Accueil" },
   { href: "/#menu", label: "Notre carte" },
+  { href: "/suivi", label: "Suivre ma commande" },
   { href: "/#a-propos", label: "À propos" },
   { href: "/#contact", label: "Contact" },
 ];
@@ -15,11 +16,19 @@ export function SiteHeader() {
           <span className="text-orange-500">Saveur</span> Amir
         </Link>
         <nav className="flex flex-wrap items-center gap-5 text-sm text-neutral-200">
-          {links.map((link) => (
-            <a key={link.href} href={link.href} className="transition hover:text-orange-400">
-              {link.label}
-            </a>
-          ))}
+          {links.map((link) =>
+            // Les ancres de la page d'accueil restent des <a> : Link ne sait pas
+            // faire défiler vers un fragment de la page déjà affichée.
+            link.href.includes("#") ? (
+              <a key={link.href} href={link.href} className="transition hover:text-orange-400">
+                {link.label}
+              </a>
+            ) : (
+              <Link key={link.href} href={link.href} className="transition hover:text-orange-400">
+                {link.label}
+              </Link>
+            )
+          )}
         </nav>
         <div className="flex items-center gap-3">
           <Link

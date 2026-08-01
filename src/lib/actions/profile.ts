@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { premierMessage, refus } from "@/lib/actions/resultat";
 
 async function requireUser() {
   const session = await auth();
@@ -19,12 +20,14 @@ const updateProfileSchema = z.object({
 
 export async function updateProfile(input: z.infer<typeof updateProfileSchema>) {
   const session = await requireUser();
-  const data = updateProfileSchema.parse(input);
+  const parsed = updateProfileSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const existing = await prisma.user.findFirst({
     where: { email: data.email, NOT: { id: session.user.id } },
   });
-  if (existing) throw new Error("Cet email est déjà utilisé");
+  if (existing) return refus("Cet email est déjà utilisé");
 
   await prisma.user.update({
     where: { id: session.user.id },
@@ -41,13 +44,15 @@ const changePasswordSchema = z.object({
 
 export async function changePassword(input: z.infer<typeof changePasswordSchema>) {
   const session = await requireUser();
-  const data = changePasswordSchema.parse(input);
+  const parsed = changePasswordSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user) throw new Error("Utilisateur introuvable");
+  if (!user) return refus("Utilisateur introuvable");
 
   const isValid = await bcrypt.compare(data.currentPassword, user.password);
-  if (!isValid) throw new Error("Mot de passe actuel incorrect");
+  if (!isValid) return refus("Mot de passe actuel incorrect");
 
   const hashed = await bcrypt.hash(data.newPassword, 10);
   await prisma.user.update({ where: { id: session.user.id }, data: { password: hashed } });

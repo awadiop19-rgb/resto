@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateProfile, changePassword } from "@/lib/actions/profile";
+import { assurerSucces } from "@/lib/actions/resultat";
 import type { Role } from "@/generated/prisma/client";
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -37,7 +38,7 @@ export function ProfileForm({ name, email, role }: { name: string; email: string
     }
     startTransition(async () => {
       try {
-        await updateProfile({ name: profileForm.name.trim(), email: profileForm.email.trim() });
+        assurerSucces(await updateProfile({ name: profileForm.name.trim(), email: profileForm.email.trim() }));
         setProfileSuccess("Profil mis à jour");
       } catch (e) {
         setProfileError(e instanceof Error ? e.message : "Erreur lors de la mise à jour");
@@ -62,10 +63,12 @@ export function ProfileForm({ name, email, role }: { name: string; email: string
     }
     startTransition(async () => {
       try {
-        await changePassword({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        });
+        assurerSucces(
+          await changePassword({
+            currentPassword: passwordForm.currentPassword,
+            newPassword: passwordForm.newPassword,
+          })
+        );
         setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
         setPasswordSuccess("Mot de passe modifié");
       } catch (e) {
