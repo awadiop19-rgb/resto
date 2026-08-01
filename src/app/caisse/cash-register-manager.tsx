@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { openCashRegister, payOrder } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
 import type { PaymentMethod } from "@/generated/prisma/client";
 import { CHART } from "@/lib/chart-theme";
 import { formatFCFA } from "@/lib/format";
+import { SOURCE_LABELS } from "@/lib/libelles-commande";
 import { totalCommande } from "@/lib/total-commande";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
 
@@ -50,14 +52,134 @@ function libelleCommande(order: { tableNumber: number | null; customerName: stri
   return order.customerName ?? "Commande en ligne";
 }
 
+// Le comptoir d'abord : c'est là que le client attend devant la caisse.
+const GROUPES = ["INTERNE", "EN_LIGNE"] as const;
+
+/**
+ * Un tableau par origine. Les séparer évite au caissier de trier à l'œil entre
+ * un client au comptoir et une commande passée sur le site.
+ */
+function TableauAEncaisser({
+  titre,
+  orders,
+  cashRegister,
+  caisseFermeeMessage,
+  isPending,
+  payingOrderId,
+  onPay,
+}: {
+  titre: string;
+  orders: UnpaidOrder[];
+  cashRegister: CashRegister | null;
+  caisseFermeeMessage: string | undefined;
+  isPending: boolean;
+  payingOrderId: string | null;
+  onPay: (orderId: string, method: "CASH" | "WAVE") => void;
+}) {
+  const total = orders.reduce((s, o) => s + totalCommande(o.items, o.deliveryFee), 0);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-1.5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {titre}
+          <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+            {orders.length}
+          </span>
+        </h3>
+        {orders.length > 0 && (
+          <span className="text-xs text-slate-500 tabular-nums">{formatFCFA(total)}</span>
+        )}
+      </div>
+
+      {orders.length === 0 ? (
+        <p className="py-3 text-center text-xs text-slate-400">Rien à encaisser ici.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-slate-400">
+                <th className="pb-2">Commande</th>
+                <th className="pb-2">Articles</th>
+                <th className="pb-2">Total</th>
+                <th className="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => {
+                const ligne = totalCommande(order.items, order.deliveryFee);
+                const isPayingThis = isPending && payingOrderId === order.id;
+                return (
+                  <tr key={order.id} className="border-t border-slate-100 align-top">
+                    <td className="py-2 pr-2">
+                      {libelleCommande(order)}
+                      <div className="text-xs text-slate-400">
+                        {new Date(order.createdAt).toLocaleString("fr-FR")}
+                      </div>
+                      {order.waveDeclaredAt && (
+                        <div className="mt-1 rounded-md bg-sky-50 px-2 py-1 text-xs text-sky-800">
+                          <span className="font-semibold">Paiement Wave annoncé</span> à{" "}
+                          {new Date(order.waveDeclaredAt).toLocaleTimeString("fr-FR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {order.waveReference && (
+                            <>
+                              {" · "}
+                              <span className="font-mono">{order.waveReference}</span>
+                            </>
+                          )}
+                          <div className="text-sky-700">
+                            À vérifier dans Wave avant d&apos;encaisser.
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 pr-2 text-slate-600">
+                      {order.items.map((i) => `${i.quantity}x ${i.menuItem.name}`).join(", ")}
+                    </td>
+                    <td className="py-2 pr-2 font-semibold tabular-nums">{formatFCFA(ligne)}</td>
+                    <td className="py-2 pr-2 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          disabled={isPending || !cashRegister}
+                          title={caisseFermeeMessage}
+                          onClick={() => onPay(order.id, "CASH")}
+                          className="rounded-md bg-emerald-600 px-3 py-1 text-xs text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isPayingThis ? "..." : "Payer Cash"}
+                        </button>
+                        <button
+                          disabled={isPending || !cashRegister}
+                          title={caisseFermeeMessage}
+                          onClick={() => onPay(order.id, "WAVE")}
+                          className="rounded-md bg-sky-600 px-3 py-1 text-xs text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isPayingThis ? "..." : "Payer Wave"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CashRegisterManager({
   cashRegister,
   unpaidOrders,
   paidOrders,
+  impayeesPassees,
 }: {
   cashRegister: CashRegister | null;
   unpaidOrders: UnpaidOrder[];
   paidOrders: PaidOrder[];
+  impayeesPassees: { nombre: number; dernierJour: string | null };
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +204,11 @@ export function CashRegisterManager({
   const caisseFermeeMessage = cashRegister
     ? undefined
     : "Ouvrez votre caisse avant d'encaisser un paiement";
+
+  const parSource = {
+    INTERNE: unpaidOrders.filter((o) => o.source === "INTERNE"),
+    EN_LIGNE: unpaidOrders.filter((o) => o.source === "EN_LIGNE"),
+  };
 
   function handleOpen() {
     setError(null);
@@ -204,81 +331,37 @@ export function CashRegisterManager({
             Encaissement suspendu : ouvrez d&apos;abord votre journée de caisse ci-dessus.
           </p>
         )}
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase text-slate-400">
-              <th className="pb-2">Commande</th>
-              <th className="pb-2">Articles</th>
-              <th className="pb-2">Total</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {unpaidOrders.map((order) => {
-              const total = totalCommande(order.items, order.deliveryFee);
-              const isPayingThis = isPending && payingOrderId === order.id;
-              return (
-                <tr key={order.id} className="border-t border-slate-100 align-top">
-                  <td className="py-2 pr-2">
-                    {libelleCommande(order)}
-                    <div className="text-xs text-slate-400">
-                      {new Date(order.createdAt).toLocaleString("fr-FR")}
-                    </div>
-                    {order.waveDeclaredAt && (
-                      <div className="mt-1 rounded-md bg-sky-50 px-2 py-1 text-xs text-sky-800">
-                        <span className="font-semibold">Paiement Wave annoncé</span> à{" "}
-                        {new Date(order.waveDeclaredAt).toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                        {order.waveReference && (
-                          <>
-                            {" · "}
-                            <span className="font-mono">{order.waveReference}</span>
-                          </>
-                        )}
-                        <div className="text-sky-700">À vérifier dans Wave avant d&apos;encaisser.</div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-2 pr-2 text-slate-600">
-                    {order.items.map((i) => `${i.quantity}x ${i.menuItem.name}`).join(", ")}
-                  </td>
-                  <td className="py-2 pr-2 font-semibold tabular-nums">{formatFCFA(total)}</td>
-                  <td className="py-2 pr-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        disabled={isPending || !cashRegister}
-                        title={caisseFermeeMessage}
-                        onClick={() => handlePay(order.id, "CASH")}
-                        className="rounded-md bg-emerald-600 px-3 py-1 text-xs text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isPayingThis ? "..." : "Payer Cash"}
-                      </button>
-                      <button
-                        disabled={isPending || !cashRegister}
-                        title={caisseFermeeMessage}
-                        onClick={() => handlePay(order.id, "WAVE")}
-                        className="rounded-md bg-sky-600 px-3 py-1 text-xs text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isPayingThis ? "..." : "Payer Wave"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {unpaidOrders.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-4 text-center text-slate-400">
-                  Aucune commande en attente de paiement.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        </div>
+
+        {impayeesPassees.nombre > 0 && impayeesPassees.dernierJour && (
+          <p className="mb-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {impayeesPassees.nombre} commande(s) des services précédents ne sont pas encaissées.{" "}
+            <Link
+              href={`/caisse?jour=${impayeesPassees.dernierJour}`}
+              className="text-orange-600 hover:underline"
+            >
+              Les retrouver dans les commandes du passé
+            </Link>
+          </p>
+        )}
+
+        {unpaidOrders.length === 0 ? (
+          <p className="py-4 text-center text-slate-400">Aucune commande en attente de paiement.</p>
+        ) : (
+          <div className="space-y-5">
+            {GROUPES.map((groupe) => (
+              <TableauAEncaisser
+                key={groupe}
+                titre={SOURCE_LABELS[groupe]}
+                orders={parSource[groupe]}
+                cashRegister={cashRegister}
+                caisseFermeeMessage={caisseFermeeMessage}
+                isPending={isPending}
+                payingOrderId={payingOrderId}
+                onPay={handlePay}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">

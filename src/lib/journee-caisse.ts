@@ -20,6 +20,19 @@ export function debutJourneeExploitation(maintenant = new Date()) {
   return debut;
 }
 
+/**
+ * Bornes de la journée d'exploitation d'une date : 6h ce jour-là → 6h le lendemain.
+ * Une commande prise à 00h30 appartient donc au service de la veille, comme la
+ * caisse qui l'encaisse.
+ */
+export function borneJournee(date: Date) {
+  const debut = new Date(date);
+  debut.setHours(HEURE_DEBUT_JOURNEE, 0, 0, 0);
+  const fin = new Date(debut);
+  fin.setDate(fin.getDate() + 1);
+  return { debut, fin };
+}
+
 /** Seuls ces rôles peuvent détenir une caisse, donc être en retard de clôture. */
 function peutTenirUneCaisse(role: Role) {
   return role === "CAISSIER" || role === "ADMIN";
