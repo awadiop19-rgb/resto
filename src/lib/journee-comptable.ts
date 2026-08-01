@@ -26,6 +26,13 @@ export type EncaissementLigne = {
   tableNumber: number | null;
   customerName: string | null;
   type: "SUR_PLACE" | "A_EMPORTER" | "LIVRAISON";
+  /** Renseignée si la comptabilité a rectifié le mode saisi par le caissier. */
+  correction: {
+    modeOrigine: "CASH" | "WAVE";
+    motif: string | null;
+    auteur: string | null;
+    date: Date;
+  } | null;
 };
 
 export type CaisseJournee = {
@@ -121,6 +128,7 @@ export async function getJourneeComptable() {
           cashier: { select: { id: true, name: true } },
           payments: {
             include: {
+              methodCorrectedBy: { select: { name: true } },
               order: {
                 select: {
                   reference: true,
@@ -210,6 +218,17 @@ export async function getJourneeComptable() {
           tableNumber: p.order.tableNumber,
           customerName: p.order.customerName,
           type: p.order.type,
+          // `methodCorrectedAt` porte la correction : `originalMethod` seul ne
+          // dirait pas si elle a eu lieu quand le mode d'origine est réécrit.
+          correction:
+            p.methodCorrectedAt && p.originalMethod
+              ? {
+                  modeOrigine: p.originalMethod,
+                  motif: p.methodCorrectionNote,
+                  auteur: p.methodCorrectedBy?.name ?? null,
+                  date: p.methodCorrectedAt,
+                }
+              : null,
         })),
       };
     });

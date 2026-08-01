@@ -1,14 +1,109 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { StatTile } from "@/components/stat-tile";
+import { corrigerModePaiement } from "@/lib/actions/caisse";
+import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 import { TYPE_CLASSES, TYPE_LABELS } from "@/lib/libelles-commande";
-import type { CaisseJournee, CaissierJournee, JourneeComptable } from "@/lib/journee-comptable";
+import type {
+  CaisseJournee,
+  CaissierJournee,
+  EncaissementLigne,
+  JourneeComptable,
+} from "@/lib/journee-comptable";
 
 const heure = (date: Date) =>
   new Date(date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+const MODE_LABELS = { CASH: "Espèces", WAVE: "Wave" } as const;
+
+/**
+ * Rectification du mode d'un encaissement par la comptabilité.
+ *
+ * Le montant n'est jamais touché : seule la touche pressée par le caissier est
+ * en cause. Le motif est exigé ici comme il l'est côté serveur — une recette qui
+ * bascule d'espèces à Wave doit rester explicable.
+ */
+function CorrigerMode({ encaissement }: { encaissement: EncaissementLigne }) {
+  const router = useRouter();
+  const [ouvert, setOuvert] = useState(false);
+  const [motif, setMotif] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, demarrer] = useTransition();
+
+  const cible = encaissement.method === "CASH" ? "WAVE" : "CASH";
+
+  function soumettre() {
+    setErreur(null);
+    demarrer(async () => {
+      try {
+        assurerSucces(
+          await corrigerModePaiement({ paymentId: encaissement.id, method: cible, note: motif })
+        );
+        setOuvert(false);
+        setMotif("");
+        router.refresh();
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : "La correction a échoué");
+      }
+    });
+  }
+
+  if (!ouvert) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOuvert(true)}
+        className="text-xs text-orange-600 hover:underline"
+      >
+        Corriger
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1.5 rounded-md border border-orange-200 bg-orange-50/60 p-2">
+      <p className="text-xs text-slate-600">
+        Requalifier en <span className="font-semibold">{MODE_LABELS[cible]}</span>
+      </p>
+      <input
+        type="text"
+        value={motif}
+        onChange={(e) => setMotif(e.target.value)}
+        placeholder="Raison de la correction"
+        maxLength={200}
+        autoFocus
+        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+      />
+      {erreur && <p className="text-xs text-red-700">{erreur}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={soumettre}
+          disabled={enCours || motif.trim().length === 0}
+          className="rounded bg-orange-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {enCours ? "Enregistrement…" : "Enregistrer"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOuvert(false);
+            setErreur(null);
+          }}
+          disabled={enCours}
+          className="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Comment désigner une commande en une colonne : ce que le caissier reconnaît. */
 function libelleCommande(commande: {
@@ -142,7 +237,20 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
                       </span>
                     </td>
                     <td className="py-1.5 pr-3 text-slate-600">
-                      {e.method === "CASH" ? "Espèces" : "Wave"}
+                      <div className="flex items-center gap-2">
+                        <span>{MODE_LABELS[e.method]}</span>
+                        {/* Corriger n'a de sens que tant que rien n'est versé :
+                            après clôture, les totaux de la caisse sont figés. */}
+                        {caisse.ouverte && <CorrigerMode encaissement={e} />}
+                      </div>
+                      {e.correction && (
+                        <p className="mt-0.5 text-xs text-[#b47400]">
+                          corrigé depuis {MODE_LABELS[e.correction.modeOrigine]}
+                          {e.correction.motif && ` · ${e.correction.motif}`}
+                          {e.correction.auteur && ` · ${e.correction.auteur}`} ·{" "}
+                          {heure(e.correction.date)}
+                        </p>
+                      )}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-medium">{formatFCFA(e.amount)}</td>
                   </tr>
@@ -204,7 +312,19 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
 
   function exportCsv() {
     const rows: (string | number)[][] = [
-      ["Caissier", "Caisse", "État", "Heure", "Commande", "Type", "Mode", "Montant"],
+      [
+        "Caissier",
+        "Caisse",
+        "État",
+        "Heure",
+        "Commande",
+        "Type",
+        "Mode",
+        "Montant",
+        "Mode saisi à l'origine",
+        "Motif de la correction",
+        "Corrigé par",
+      ],
       ...caissiers.flatMap((caissier) =>
         caissier.caisses.flatMap((caisse) =>
           caisse.encaissements.map((e) => [
@@ -214,8 +334,11 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
             new Date(e.paidAt).toLocaleString("fr-FR"),
             libelleCommande(e),
             TYPE_LABELS[e.type],
-            e.method === "CASH" ? "Espèces" : "Wave",
+            MODE_LABELS[e.method],
             e.amount,
+            e.correction ? MODE_LABELS[e.correction.modeOrigine] : "",
+            e.correction?.motif ?? "",
+            e.correction?.auteur ?? "",
           ])
         )
       ),

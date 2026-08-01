@@ -141,6 +141,61 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
   revalidatePath("/comptabilite");
 }
 
+const corrigerModePaiementSchema = z.object({
+  paymentId: z.string(),
+  method: z.enum(["CASH", "WAVE"]),
+  note: z.string().trim().min(1, "Indiquez la raison de la correction").max(200),
+});
+
+/**
+ * Corrige le mode d'un encaissement quand le caissier s'est trompé de touche.
+ *
+ * Limité aux caisses encore ouvertes. À la clôture, `totalCash`, `expectedCash`
+ * et `difference` sont figés à partir des paiements du moment : les rouvrir ici
+ * réécrirait un versement déjà remis à la comptabilité, qui dispose pour cela de
+ * `correctCashRegister`.
+ *
+ * Le montant ne bouge pas — seul change le mode par lequel il est entré. C'est
+ * la répartition espèces/Wave, et donc les espèces attendues en tiroir, qui s'en
+ * trouvent rétablies.
+ */
+export async function corrigerModePaiement(input: z.infer<typeof corrigerModePaiementSchema>) {
+  const session = await requireAdminOrComptabilite();
+
+  const parsed = corrigerModePaiementSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
+
+  const paiement = await prisma.payment.findUnique({
+    where: { id: data.paymentId },
+    include: { cashRegister: { select: { status: true } } },
+  });
+  if (!paiement) return refus("Encaissement introuvable");
+  if (paiement.cashRegister.status !== "OUVERTE") {
+    return refus(
+      "Cette caisse est déjà clôturée : son versement fait foi. Passez par une correction de versement."
+    );
+  }
+  if (paiement.method === data.method) return refus("Ce mode de paiement est déjà celui enregistré");
+
+  await prisma.payment.update({
+    where: { id: paiement.id },
+    data: {
+      method: data.method,
+      // Le mode d'origine ne se renseigne qu'une fois : un aller-retour
+      // Espèces → Wave → Espèces effacerait sinon la trace de la saisie initiale.
+      originalMethod: paiement.originalMethod ?? paiement.method,
+      methodCorrectionNote: data.note,
+      methodCorrectedById: session.user.id,
+      methodCorrectedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/comptabilite/journee");
+  revalidatePath("/comptabilite");
+  revalidatePath("/caisse");
+}
+
 const correctCashRegisterSchema = z.object({
   id: z.string(),
   correctedAmount: z.number().min(0, "Montant invalide"),
