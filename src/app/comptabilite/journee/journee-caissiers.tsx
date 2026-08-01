@@ -197,6 +197,27 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
         )}
       </dl>
 
+      {/* Sans ce détail, l'écart entre l'encaissé et le versé resterait
+          inexpliqué : la différence est sortie du tiroir pendant le service. */}
+      {caisse.sortiesCaisse > 0 && (
+        <details className="border-t border-slate-100">
+          <summary className="cursor-pointer px-3 py-2 text-xs text-[#b47400] hover:underline">
+            {formatFCFA(caisse.sortiesCaisse)} sortis du tiroir ·{" "}
+            {caisse.depensesCaisse.length} dépense(s) de caisse
+          </summary>
+          <ul className="px-3 pb-3 text-sm">
+            {caisse.depensesCaisse.map((d) => (
+              <li key={d.id} className="flex items-baseline gap-2 border-t border-slate-100 py-1.5">
+                <span className="text-xs text-slate-500 tabular-nums">{heure(d.date)}</span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{d.category}</span>
+                <span className="text-slate-600">{d.label}</span>
+                <span className="ml-auto font-medium tabular-nums">{formatFCFA(d.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
       {!caisse.ouverte && (
         <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
           Déclaré {formatFCFA(caisse.declaredAmount ?? 0)} pour{" "}

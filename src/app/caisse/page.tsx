@@ -54,6 +54,10 @@ export default async function CaissePage({
     prisma.cashRegister.findMany({
       where: { cashierId: userId, openedAt: { gte: debutService } },
       include: {
+        expenses: {
+          select: { id: true, label: true, category: true, amount: true, date: true },
+          orderBy: { date: "desc" },
+        },
         payments: {
           include: { order: { include: { items: { include: { menuItem: true } } } } },
         },

@@ -52,8 +52,11 @@ export type CaisseJournee = {
    */
   totalDuJour: number;
   nombreDuJour: number;
-  /** Ce que le tiroir devrait contenir : fond de caisse + espèces encaissées. */
+  /** Ce que le tiroir devrait contenir : fond + espèces encaissées − sorties. */
   especesEnTiroir: number;
+  /** Espèces sorties du tiroir pour des dépenses courantes pendant le service. */
+  sortiesCaisse: number;
+  depensesCaisse: { id: string; label: string; category: string; amount: number; date: Date }[];
   /** Ouverte lors d'un service antérieur : son jour d'ouverture doit être affiché. */
   ouverteAvantLaJournee: boolean;
   /** Caisse restée ouverte sur une journée antérieure : à relancer. */
@@ -126,6 +129,7 @@ export async function getJourneeComptable() {
         },
         include: {
           cashier: { select: { id: true, name: true } },
+          expenses: { select: { id: true, label: true, category: true, amount: true, date: true } },
           payments: {
             include: {
               methodCorrectedBy: { select: { name: true } },
@@ -174,6 +178,7 @@ export async function getJourneeComptable() {
       const totalWave = caisse.payments
         .filter((p) => p.method === "WAVE")
         .reduce((s, p) => s + p.amount, 0);
+      const sorties = caisse.expenses.reduce((s, e) => s + e.amount, 0);
       const ouverte = caisse.status === "OUVERTE";
       const ouverteAvantLaJournee = caisse.openedAt < debut;
       const enRetard = ouverte && ouverteAvantLaJournee;
@@ -197,7 +202,11 @@ export async function getJourneeComptable() {
         total: totalCash + totalWave,
         totalDuJour: duJour.reduce((s, p) => s + p.amount, 0),
         nombreDuJour: duJour.length,
-        especesEnTiroir: caisse.openingFloat + totalCash,
+        // Ce qui est sorti du tiroir n'y est plus : l'omettre ferait attendre au
+        // comptable des espèces qui ont déjà servi à régler une dépense.
+        especesEnTiroir: caisse.openingFloat + totalCash - sorties,
+        sortiesCaisse: sorties,
+        depensesCaisse: caisse.expenses,
         ouverteAvantLaJournee,
         enRetard,
         // Calculé côté serveur : l'heure du poste client ne fait pas foi.
@@ -319,8 +328,13 @@ export async function getJourneeComptable() {
     // montant reste en circulation, mais il n'est pas un flux d'aujourd'hui.
     totalEncaisse: caisses.reduce((s, c) => s + c.totalDuJour, 0),
     nombreEncaissements: caisses.reduce((s, c) => s + c.nombreDuJour, 0),
-    // Recette déjà remise à la comptabilité, fond de caisse déduit.
-    dejaVerse: caissesFermees.reduce((s, c) => s + ((c.retenu ?? 0) - c.openingFloat), 0),
+    // Recette déjà remise, fond de caisse déduit. Les sorties d'espèces sont
+    // réintégrées : elles sont déjà comptées en dépenses, les retrancher ici
+    // amputerait la recette une seconde fois.
+    dejaVerse: caissesFermees.reduce(
+      (s, c) => s + (c.retenu ?? 0) - c.openingFloat + c.sortiesCaisse,
+      0
+    ),
     // Espèces encaissées sur des caisses encore ouvertes : attendues au versement.
     especesEnAttente: caissesOuvertes.reduce((s, c) => s + c.totalCash, 0),
     // Ce qui devrait physiquement se trouver dans les tiroirs à cet instant.

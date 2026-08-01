@@ -70,6 +70,7 @@ export function CaissesEnRetard({ caisses }: { caisses: CaisseEnRetard[] }) {
                 </div>
                 <div className="mt-0.5 text-xs text-orange-600">
                   {caisse.nombrePaiements} encaissement{caisse.nombrePaiements > 1 ? "s" : ""}
+                  {caisse.sorties > 0 && ` · ${formatFCFA(caisse.sorties)} de dépenses déduites`}
                 </div>
               </div>
             </div>
@@ -78,6 +79,7 @@ export function CaissesEnRetard({ caisses }: { caisses: CaisseEnRetard[] }) {
               <FermetureCaisseForm
                 openingFloat={caisse.openingFloat}
                 totalCash={caisse.totalCash}
+                sorties={caisse.sorties}
                 intitule="Clôturer cette journée et verser les espèces"
               />
             </div>

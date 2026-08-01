@@ -51,7 +51,10 @@ export async function getCaissesNonFermees(userId: string) {
       status: "OUVERTE",
       openedAt: { lt: debutJourneeExploitation() },
     },
-    include: { payments: { select: { amount: true, method: true } } },
+    include: {
+      payments: { select: { amount: true, method: true } },
+      expenses: { select: { amount: true } },
+    },
     orderBy: { openedAt: "asc" },
   });
 
@@ -64,6 +67,9 @@ export async function getCaissesNonFermees(userId: string) {
     const totalWave = caisse.payments
       .filter((p) => p.method === "WAVE")
       .reduce((s, p) => s + p.amount, 0);
+    // Ce qui est sorti du tiroir pour une dépense n'y est plus : sans cette
+    // déduction, le rattrapage réclamerait des espèces déjà dépensées.
+    const sorties = caisse.expenses.reduce((s, e) => s + e.amount, 0);
     return {
       id: caisse.id,
       openedAt: caisse.openedAt,
@@ -71,7 +77,8 @@ export async function getCaissesNonFermees(userId: string) {
       nombrePaiements: caisse.payments.length,
       totalCash,
       totalWave,
-      especesAttendues: caisse.openingFloat + totalCash,
+      sorties,
+      especesAttendues: caisse.openingFloat + totalCash - sorties,
       jourLabel: format(caisse.openedAt, "EEEE d MMMM yyyy", { locale: fr }),
       // Calculé côté serveur : l'heure du poste client ne fait pas foi.
       joursEcoules: Math.max(1, differenceInCalendarDays(maintenant, caisse.openedAt)),

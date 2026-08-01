@@ -43,6 +43,8 @@ export type VersementRow = {
   declaredAmount: number;
   /** Montant retenu par la comptabilité : la correction prime sur la déclaration. */
   retenu: number;
+  /** Espèces sorties du tiroir pour des dépenses courantes pendant le service. */
+  sortiesCaisse: number;
   /** Espèces issues des ventes : le fond de caisse est ressorti puis rentré, il ne crée pas de recette. */
   net: number;
   difference: number | null;
@@ -59,7 +61,10 @@ export async function getComptabilite(periode: Periode) {
   const [closedRegisters, payments, expenses, openRegistersCount] = await Promise.all([
     prisma.cashRegister.findMany({
       where: { status: "FERMEE", closedAt: intervalle },
-      include: { cashier: { select: { id: true, name: true } } },
+      include: {
+        cashier: { select: { id: true, name: true } },
+        expenses: { select: { amount: true } },
+      },
       orderBy: { closedAt: "desc" },
     }),
     prisma.payment.findMany({
@@ -86,6 +91,7 @@ export async function getComptabilite(periode: Periode) {
 
   const versements: VersementRow[] = closedRegisters.map((cr) => {
     const retenu = cr.correctedAmount ?? cr.declaredAmount ?? 0;
+    const sortiesCaisse = cr.expenses.reduce((s, e) => s + e.amount, 0);
     return {
       id: cr.id,
       cashierName: cr.cashier.name,
@@ -96,7 +102,10 @@ export async function getComptabilite(periode: Periode) {
       expectedCash: cr.expectedCash,
       declaredAmount: cr.declaredAmount ?? 0,
       retenu,
-      net: retenu - cr.openingFloat,
+      sortiesCaisse,
+      // Ce qui est sorti du tiroir pour une dépense est déjà compté en dépenses.
+      // Ne pas le réintégrer ici l'amputerait une seconde fois de la recette.
+      net: retenu - cr.openingFloat + sortiesCaisse,
       difference: cr.difference,
       corrected: cr.correctedAmount != null,
       note: cr.note,
@@ -207,7 +216,10 @@ export async function getComptabilite(periode: Periode) {
   for (const cr of closedRegisters) {
     const entry = entryFor(cr.cashierId, cr.cashier.name);
     entry.versementsCount += 1;
-    entry.netVerse += (cr.correctedAmount ?? cr.declaredAmount ?? 0) - cr.openingFloat;
+    entry.netVerse +=
+      (cr.correctedAmount ?? cr.declaredAmount ?? 0) -
+      cr.openingFloat +
+      cr.expenses.reduce((s, e) => s + e.amount, 0);
     entry.ecarts += cr.difference ?? 0;
   }
   const parCaissier = Array.from(parCaissierMap.values())

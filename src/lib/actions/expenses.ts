@@ -52,6 +52,18 @@ export async function deleteExpense(id: string) {
     );
   }
 
+  // Une dépense réglée depuis un tiroir déjà versé a été déduite des espèces
+  // attendues à la clôture : la retirer fabriquerait un excédent de caisse sur
+  // un versement pourtant remis et vérifié.
+  const surCaisseFermee = await prisma.expense.findFirst({
+    where: { id, cashRegister: { status: "FERMEE" } },
+  });
+  if (surCaisseFermee) {
+    return refus(
+      "Cette dépense a été réglée depuis une caisse déjà versée. La supprimer fausserait le versement."
+    );
+  }
+
   await prisma.expense.delete({ where: { id } });
   revalidatePath("/depenses");
   revalidatePath("/dashboard");

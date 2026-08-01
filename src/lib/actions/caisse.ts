@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { blocageCaisse } from "@/lib/journee-caisse";
 import { premierMessage, refus } from "@/lib/actions/resultat";
+import { especesDisponibles, estCategorieDeCaisse } from "@/lib/depenses-caisse";
 import { totalCommande } from "@/lib/total-commande";
 
 async function requireCashier() {
@@ -113,8 +114,11 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
   const totalCash = payments.filter((p) => p.method === "CASH").reduce((sum, p) => sum + p.amount, 0);
   const totalWave = payments.filter((p) => p.method === "WAVE").reduce((sum, p) => sum + p.amount, 0);
 
-  // Le tiroir est versé en entier : les espèces attendues incluent le fond de caisse.
-  const expectedCash = cashRegister.openingFloat + totalCash;
+  // Le tiroir est versé en entier : les espèces attendues incluent le fond de
+  // caisse, et déduisent ce qui en est sorti pour régler une dépense courante.
+  // Sans cette déduction, chaque dépense apparaîtrait comme un manquant.
+  const sorties = await sortiesEspeces(cashRegister.id);
+  const expectedCash = cashRegister.openingFloat + totalCash - sorties;
   const difference = data.declaredAmount - expectedCash;
 
   const note = data.note?.trim() ? data.note.trim() : null;
@@ -139,6 +143,109 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
   revalidatePath("/caisse");
   revalidatePath("/caisse/versements");
   revalidatePath("/comptabilite");
+}
+
+const depenseCaisseSchema = z.object({
+  categorie: z.string().refine(estCategorieDeCaisse, "Type de dépense inconnu"),
+  commentaire: z.string().trim().min(1, "Indiquez à quoi correspond la dépense").max(200),
+  montant: z.number().positive("Le montant doit être positif"),
+});
+
+/** Espèces sorties du tiroir d'une caisse depuis son ouverture. */
+async function sortiesEspeces(cashRegisterId: string) {
+  const { _sum } = await prisma.expense.aggregate({
+    where: { cashRegisterId },
+    _sum: { amount: true },
+  });
+  return _sum.amount ?? 0;
+}
+
+/**
+ * Dépense courante réglée en espèces par le caissier depuis son tiroir.
+ *
+ * Enregistrée comme une dépense ordinaire — elle entre donc telle quelle dans le
+ * résultat comptable — mais rattachée à la caisse, ce qui retire la somme des
+ * espèces attendues à la clôture. Sans ce rattachement, chaque dépense créerait
+ * un manquant de caisse à justifier le soir.
+ */
+export async function enregistrerDepenseCaisse(input: z.infer<typeof depenseCaisseSchema>) {
+  const session = await requireCashier();
+
+  const blocage = await blocageCaisse(session.user.id, session.user.role);
+  if (blocage) return refus(blocage);
+
+  const parsed = depenseCaisseSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
+
+  const cashRegister = await prisma.cashRegister.findFirst({
+    where: { cashierId: session.user.id, status: "OUVERTE" },
+    include: { payments: { select: { amount: true, method: true } } },
+  });
+  if (!cashRegister) return refus("Ouvrez votre caisse avant d'enregistrer une dépense");
+
+  const totalCash = cashRegister.payments
+    .filter((p) => p.method === "CASH")
+    .reduce((s, p) => s + p.amount, 0);
+  const disponible = especesDisponibles({
+    openingFloat: cashRegister.openingFloat,
+    totalCash,
+    sorties: await sortiesEspeces(cashRegister.id),
+  });
+
+  // On ne sort pas du tiroir plus qu'il ne contient : la dépense serait payée
+  // avec de l'argent qui n'existe pas, et la caisse close sur un écart inventé.
+  if (data.montant > disponible) {
+    return refus(
+      `Le tiroir ne contient que ${disponible.toLocaleString("fr-FR")} F. Impossible d'en sortir ${data.montant.toLocaleString("fr-FR")} F.`
+    );
+  }
+
+  await prisma.expense.create({
+    data: {
+      label: data.commentaire,
+      amount: data.montant,
+      category: data.categorie,
+      date: new Date(),
+      userId: session.user.id,
+      cashRegisterId: cashRegister.id,
+    },
+  });
+
+  revalidatePath("/caisse");
+  revalidatePath("/depenses");
+  revalidatePath("/comptabilite");
+  revalidatePath("/comptabilite/journee");
+  revalidatePath("/comptabilite/mois");
+}
+
+/**
+ * Retrait d'une dépense mal saisie, tant que la caisse n'est pas versée.
+ * Après clôture, les espèces attendues ont été figées avec : la retirer
+ * fabriquerait un excédent sur un versement déjà remis.
+ */
+export async function supprimerDepenseCaisse(id: string) {
+  const session = await requireCashier();
+
+  const depense = await prisma.expense.findUnique({
+    where: { id },
+    include: { cashRegister: { select: { id: true, status: true, cashierId: true } } },
+  });
+  if (!depense || !depense.cashRegister) return refus("Dépense introuvable");
+  if (depense.cashRegister.cashierId !== session.user.id) {
+    return refus("Cette dépense a été enregistrée par un autre caissier");
+  }
+  if (depense.cashRegister.status !== "OUVERTE") {
+    return refus("Cette caisse est déjà versée : la dépense ne peut plus être retirée");
+  }
+
+  await prisma.expense.delete({ where: { id } });
+
+  revalidatePath("/caisse");
+  revalidatePath("/depenses");
+  revalidatePath("/comptabilite");
+  revalidatePath("/comptabilite/journee");
+  revalidatePath("/comptabilite/mois");
 }
 
 const corrigerModePaiementSchema = z.object({

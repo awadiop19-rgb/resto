@@ -202,6 +202,15 @@ model Expense {
   // Renseigné quand la dépense a été engendrée par un achat de stock. Elle est
   // alors pilotée par le mouvement : on ne la saisit ni ne la supprime à part.
   stockMovement StockMovement?
+
+  // Renseigné quand un caissier a réglé la dépense en espèces depuis son tiroir.
+  // Ce lien n'est pas décoratif : il retire la somme des espèces attendues à la
+  // clôture, et la réintègre dans la recette pour qu'elle ne soit pas décomptée
+  // deux fois — une fois par le versement amoindri, une fois comme dépense.
+  cashRegisterId String?
+  cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([cashRegisterId])
 }
 
 // Produit consommable suivi en stock (denrée, boisson, emballage...). Distinct
@@ -275,6 +284,8 @@ model CashRegister {
   correctedAt     DateTime?
 
   payments  Payment[]
+  // Dépenses courantes réglées en espèces depuis ce tiroir pendant le service.
+  expenses  Expense[]
   createdAt DateTime  @default(now())
 }
 

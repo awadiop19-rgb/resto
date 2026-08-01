@@ -13,11 +13,14 @@ import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 export function FermetureCaisseForm({
   openingFloat,
   totalCash,
+  sorties = 0,
   onClosed,
   intitule = "Fermer la caisse et faire le versement",
 }: {
   openingFloat: number;
   totalCash: number;
+  /** Espèces sorties du tiroir pour des dépenses courantes pendant le service. */
+  sorties?: number;
   onClosed?: () => void;
   intitule?: string;
 }) {
@@ -26,8 +29,9 @@ export function FermetureCaisseForm({
   const [declaredAmount, setDeclaredAmount] = useState("");
   const [closeNote, setCloseNote] = useState("");
 
-  // Le tiroir est versé en entier : les espèces attendues incluent le fond de caisse.
-  const expectedCash = openingFloat + totalCash;
+  // Le tiroir est versé en entier : les espèces attendues incluent le fond de
+  // caisse et déduisent ce qui en est sorti pour régler une dépense.
+  const expectedCash = openingFloat + totalCash - sorties;
   const declaredNumber = Number(declaredAmount);
   const hasDeclared = declaredAmount !== "" && !Number.isNaN(declaredNumber);
   const difference = hasDeclared ? declaredNumber - expectedCash : 0;
@@ -68,6 +72,12 @@ export function FermetureCaisseForm({
       <h3 className="mb-1 text-sm font-semibold">{intitule}</h3>
       <p className="mb-3 text-xs text-slate-500">
         Comptez la totalité des espèces présentes dans le tiroir, fond de caisse compris.
+        {sorties > 0 && (
+          <>
+            {" "}
+            {formatFCFA(sorties)} en sont sortis pour des dépenses : l&apos;attendu en tient compte.
+          </>
+        )}
       </p>
 
       {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}

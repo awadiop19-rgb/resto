@@ -10,6 +10,7 @@ import { formatFCFA } from "@/lib/format";
 import { SOURCE_LABELS } from "@/lib/libelles-commande";
 import { totalCommande } from "@/lib/total-commande";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
+import { DepensesCaisse, type DepenseCaisse } from "./depenses-caisse";
 
 type Payment = { id: string; amount: number; method: PaymentMethod };
 type CashRegister = {
@@ -17,6 +18,7 @@ type CashRegister = {
   openedAt: Date;
   openingFloat: number;
   payments: Payment[];
+  expenses: DepenseCaisse[];
 };
 
 type OrderItem = {
@@ -190,8 +192,11 @@ export function CashRegisterManager({
   const totalCash = cashRegister?.payments.filter((p) => p.method === "CASH").reduce((s, p) => s + p.amount, 0) ?? 0;
   const totalWave = cashRegister?.payments.filter((p) => p.method === "WAVE").reduce((s, p) => s + p.amount, 0) ?? 0;
 
-  // Le tiroir est versé en entier à la comptabilité : le fond de caisse fait partie de l'attendu.
-  const expectedCash = (cashRegister?.openingFloat ?? 0) + totalCash;
+  const sorties = cashRegister?.expenses.reduce((s, d) => s + d.amount, 0) ?? 0;
+
+  // Le tiroir est versé en entier à la comptabilité : le fond de caisse fait
+  // partie de l'attendu, et ce qui en est sorti pour une dépense en est retiré.
+  const expectedCash = (cashRegister?.openingFloat ?? 0) + totalCash - sorties;
 
   const restantAEncaisser = unpaidOrders.reduce(
     (somme, order) => somme + totalCommande(order.items, order.deliveryFee),
@@ -299,15 +304,28 @@ export function CashRegisterManager({
             <div className="rounded-lg bg-orange-50 p-3 text-sm">
               <div className="text-orange-700">Espèces attendues en caisse</div>
               <div className="font-semibold text-orange-800">{expectedCash.toLocaleString("fr-FR")} F</div>
-              <div className="mt-0.5 text-xs text-orange-600">Fond de caisse + encaissements Cash</div>
+              <div className="mt-0.5 text-xs text-orange-600">
+                Fond de caisse + encaissements Cash
+                {sorties > 0 && ` − ${sorties.toLocaleString("fr-FR")} F de dépenses`}
+              </div>
             </div>
           </div>
 
           <div className="border-t border-slate-100 pt-4">
-            <FermetureCaisseForm openingFloat={cashRegister.openingFloat} totalCash={totalCash} />
+            <FermetureCaisseForm
+              openingFloat={cashRegister.openingFloat}
+              totalCash={totalCash}
+              sorties={sorties}
+            />
           </div>
         </div>
       )}
+
+      <DepensesCaisse
+        depenses={cashRegister?.expenses ?? []}
+        disponible={expectedCash}
+        caisseOuverte={cashRegister != null}
+      />
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
