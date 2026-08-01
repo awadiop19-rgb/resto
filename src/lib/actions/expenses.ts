@@ -40,6 +40,15 @@ export async function deleteExpense(id: string) {
     throw new Error("Non autorisé");
   }
 
+  // Une dépense née d'un achat de stock appartient à son mouvement : la
+  // supprimer seule laisserait l'entrée en stock sans charge en face.
+  const liee = await prisma.stockMovement.findFirst({ where: { expenseId: id } });
+  if (liee) {
+    throw new Error(
+      "Cette dépense provient d'un achat de stock. Supprimez le mouvement depuis la page Stock."
+    );
+  }
+
   await prisma.expense.delete({ where: { id } });
   revalidatePath("/depenses");
   revalidatePath("/dashboard");

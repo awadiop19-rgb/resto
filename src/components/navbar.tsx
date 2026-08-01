@@ -10,6 +10,8 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
     { href: "/caisse", label: "Caisse" },
     { href: "/caisse/versements", label: "Versements" },
     { href: "/depenses", label: "Dépenses" },
+    { href: "/stock", label: "Stock" },
+    { href: "/produits", label: "Produits" },
     { href: "/comptabilite", label: "Comptabilité" },
     { href: "/utilisateurs", label: "Utilisateurs" },
     { href: "/profil", label: "Mon profil" },
@@ -36,6 +38,8 @@ const roleLinks: Record<string, { href: string; label: string }[]> = {
   COMPTABILITE: [
     { href: "/comptabilite", label: "Tableau de bord" },
     { href: "/depenses", label: "Dépenses" },
+    { href: "/stock", label: "Stock" },
+    { href: "/produits", label: "Produits" },
     { href: "/caisse/versements", label: "Versements" },
     { href: "/profil", label: "Mon profil" },
   ],

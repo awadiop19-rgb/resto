@@ -41,6 +41,19 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
     downloadCsv(`depenses_${new Date().toISOString().slice(0, 10)}.csv`, rows);
   }
 
+  // Une dépense adossée à un achat de stock refuse d'être supprimée seule :
+  // l'erreur doit remonter à l'écran, pas mourir dans la transition.
+  function remove(id: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteExpense(id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Suppression impossible");
+      }
+    });
+  }
+
   function submit() {
     setError(null);
     if (!form.label || !form.amount) {
@@ -146,7 +159,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
                 <td className="py-2 pr-2 text-slate-500">{expense.user.name}</td>
                 <td className="py-2 pr-2 text-right">
                   <button
-                    onClick={() => startTransition(() => deleteExpense(expense.id))}
+                    onClick={() => remove(expense.id)}
                     className="text-xs text-red-600 hover:underline"
                   >
                     Supprimer

@@ -10,6 +10,8 @@ const protectedRoutes = [
   "/commandes",
   "/menu",
   "/depenses",
+  "/produits",
+  "/stock",
   "/utilisateurs",
   "/caisse",
   "/comptabilite",
@@ -25,6 +27,10 @@ const routeRoles: { prefix: string; roles: Role[] }[] = [
   { prefix: "/utilisateurs", roles: ["ADMIN"] },
   { prefix: "/depenses", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/comptabilite", roles: ["ADMIN", "COMPTABILITE"] },
+  // Le stock est tenu par ceux qui achètent et distribuent : la cuisine consomme,
+  // elle ne saisit pas.
+  { prefix: "/produits", roles: ["ADMIN", "COMPTABILITE"] },
+  { prefix: "/stock", roles: ["ADMIN", "COMPTABILITE"] },
   { prefix: "/caisse", roles: ["ADMIN", "CAISSIER"] },
   // La configuration des tarifs reste à l'administration, pas au comptoir.
   { prefix: "/livraisons/zones", roles: ["ADMIN"] },
@@ -82,6 +88,8 @@ export const config = {
     "/commandes/:path*",
     "/menu/:path*",
     "/depenses/:path*",
+    "/produits/:path*",
+    "/stock/:path*",
     "/utilisateurs/:path*",
     "/caisse/:path*",
     "/comptabilite/:path*",

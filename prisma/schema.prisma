@@ -58,6 +58,20 @@ enum CashRegisterStatus {
   FERMEE
 }
 
+// Comment se compte un produit en stock. Les quantités sont décimales : 0,5 KG
+// vaut 500 g, inutile de multiplier les sous-unités.
+enum StockUnit {
+  KG
+  LITRE
+  UNITE
+}
+
+enum StockMovementType {
+  ACHAT // entrée : la comptabilité approvisionne le stock
+  SORTIE // sortie : la comptabilité remet des produits à la cuisine
+  AJUSTEMENT // correction d'inventaire, dans un sens ou dans l'autre
+}
+
 model User {
   id                     String         @id @default(cuid())
   name                   String
@@ -70,6 +84,7 @@ model User {
   orders                 Order[]
   deliveries             Order[]        @relation("OrderLivreur")
   expenses               Expense[]
+  stockMovements         StockMovement[]
   payments               Payment[]
   cashRegisters          CashRegister[] @relation("CashRegisterCashier")
   correctedCashRegisters CashRegister[] @relation("CashRegisterCorrector")
@@ -182,6 +197,55 @@ model Expense {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  // Renseigné quand la dépense a été engendrée par un achat de stock. Elle est
+  // alors pilotée par le mouvement : on ne la saisit ni ne la supprime à part.
+  stockMovement StockMovement?
+}
+
+// Produit consommable suivi en stock (denrée, boisson, emballage...). Distinct
+// de MenuItem, qui est ce qu'on vend : on achète du riz, on vend un thiébou.
+model Product {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  unit        StockUnit
+  category    String          @default("Ingrédients")
+  // En dessous de ce niveau, le produit remonte en alerte sur le tableau de bord.
+  seuilAlerte Float           @default(0)
+  active      Boolean         @default(true)
+  movements   StockMovement[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// Le stock n'est jamais stocké : il est la somme des mouvements. Un solde
+// dénormalisé finit toujours par diverger de son historique.
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  product   Product           @relation(fields: [productId], references: [id])
+  type      StockMovementType
+  // Delta signé appliqué au stock : positif en entrée, négatif en sortie. Le
+  // signe est posé côté serveur d'après le type, jamais saisi par l'utilisateur.
+  quantity  Float
+  // Prix d'achat unitaire figé (ACHAT uniquement) : réviser un tarif ne doit pas
+  // réécrire la valeur des approvisionnements déjà passés.
+  unitPrice Float?
+  supplier  String?
+  note      String?
+
+  // Dépense engendrée par un achat, pour que le stock et le résultat comptable
+  // proviennent d'une seule saisie.
+  expenseId String?  @unique
+  expense   Expense? @relation(fields: [expenseId], references: [id])
+
+  date      DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([date])
 }
 
 // Session de caisse ouverte par un caissier pour sa journée de travail.
