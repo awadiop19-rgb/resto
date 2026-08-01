@@ -28,6 +28,13 @@ const imageByName: Record<string, string> = {
   "Eau minéral 1L": "/dishes/eau-minerale.png",
   "Eau minérale PM": "/dishes/eau-minerale.png",
 
+  // ---- Boissons chaudes ----
+  // Faute de photo dédiée, le café au lait réutilise celle du café touba.
+  "Café au lait": "/dishes/cafe-touba.jpg",
+  "Café touba": "/dishes/cafe-touba.jpg",
+  Kinkeliba: "/dishes/kinkeliba.jpg",
+  "Thé à la menthe": "/dishes/the-menthe.jpg",
+
   // ---- Boissons Naturelles ----
   "Jus de bissap rouge 1L": "/dishes/jus-bissap-rouge-1l.webp",
   "Jus de bissap rouge PM": "/dishes/jus-bissap-rouge-pm.webp",
@@ -49,6 +56,22 @@ const imageByName: Record<string, string> = {
   Nems: "/dishes/nems.webp",
   Pastels: "/dishes/pastels.jpg",
   Rissoles: "/dishes/rissoles.jpg",
+  "Soupe du jour": "/dishes/soupe-du-jour.jpg",
+
+  // ---- Petit déjeuner ----
+  "Cake nature": "/dishes/cake-nature.jpg",
+  Muffins: "/dishes/muffins.jpg",
+  "Pain ndambé GM": "/dishes/pain-ndambe.jpg",
+  "Pain ndambé PM": "/dishes/pain-ndambe.jpg",
+  "Pain omelette PM": "/dishes/pain-omelette.jpg",
+  "Pain omelette maxi GM": "/dishes/pain-omelette.jpg",
+  "Pain omelette simple GM": "/dishes/pain-omelette.jpg",
+  "Pain petit pois GM": "/dishes/pain-petit-pois.jpg",
+  "Pain petit pois PM": "/dishes/pain-petit-pois.jpg",
+  "Pain spaghetti GM": "/dishes/pain-spaghetti.jpg",
+  "Pain spaghetti PM": "/dishes/pain-spaghetti.jpg",
+  "Sandwich poulet GM": "/dishes/sandwich-poulet.jpg",
+  "Sandwich poulet PM": "/dishes/sandwich-poulet.jpg",
 
   // ---- Desserts ----
   Lakh: "/dishes/lakh.jpg",
@@ -85,6 +108,7 @@ const imageByName: Record<string, string> = {
   Mafé: "/dishes/mafe.webp",
   "Mbakhalou saloum": "/dishes/mbakhalou-saloum.jpg",
   "Poulet Yassa": "/dishes/yassa-poulet-plat.jpg",
+  "Poulet entier": "/dishes/poulet-entier.jpg",
   "Soupe kandja": "/dishes/soupe-kandja.jpg",
   "Soupe yapp": "/dishes/soupe-yapp.jpg",
   "Thiebou djeun diaga": "/dishes/thiebou-djeun-diaga.webp",
