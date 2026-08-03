@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createExpense, deleteExpense, type DoublonPresume } from "@/lib/actions/expenses";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
@@ -17,18 +18,43 @@ type Expense = {
 
 const CATEGORIES = ["Ingrédients", "Boissons", "Équipement", "Salaires", "Loyer", "Autre"];
 
-export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
+export function ExpenseManager({
+  expenses,
+  debut,
+  fin,
+  aujourdhui,
+}: {
+  expenses: Expense[];
+  debut: string;
+  fin: string;
+  /** Jour courant calculé côté serveur, donc à GMT comme le reste de l'application. */
+  aujourdhui: string;
+}) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [doublon, setDoublon] = useState<DoublonPresume | null>(null);
+  const [periode, setPeriode] = useState({ debut, fin });
   const [form, setForm] = useState({
     label: "",
     amount: "",
     category: CATEGORIES[0],
-    date: new Date().toISOString().slice(0, 10),
+    date: aujourdhui,
   });
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const surUnJour = debut === fin;
+  // Le Z n'est pas decoratif : sans lui, "2026-08-03T00:00:00" serait lu dans le
+  // fuseau du navigateur, et le libelle annoncerait la veille depuis l'est de GMT.
+  const jour = (iso: string) => formatDate(`${iso}T00:00:00Z`);
+  const libellePeriode = surUnJour
+    ? `${debut === aujourdhui ? "Aujourd'hui · " : ""}${jour(debut)}`
+    : `Du ${jour(debut)} au ${jour(fin)}`;
+
+  function voir(d: string, f: string) {
+    setPeriode({ debut: d, fin: f });
+    router.push(`/depenses?debut=${d}&fin=${f}`);
+  }
 
   function exportCsv() {
     const rows: (string | number)[][] = [
@@ -41,7 +67,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
         e.user.name,
       ]),
     ];
-    downloadCsv(`depenses_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    downloadCsv(`depenses_${debut}_${fin}.csv`, rows);
   }
 
   // Une dépense adossée à un achat de stock refuse d'être supprimée seule :
@@ -81,7 +107,11 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
           setDoublon(resultat);
           return;
         }
-        setForm({ label: "", amount: "", category: CATEGORIES[0], date: new Date().toISOString().slice(0, 10) });
+        const enregistree = form.date;
+        setForm({ label: "", amount: "", category: CATEGORIES[0], date: aujourdhui });
+        // Une dépense datée hors de la période affichée n'apparaîtrait nulle part :
+        // enregistrée pour de bon, mais invisible. On va la montrer où elle est.
+        if (enregistree < debut || enregistree > fin) voir(enregistree, enregistree);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erreur lors de l'ajout");
       }
@@ -166,10 +196,60 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Historique</h2>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500" htmlFor="dateDebut">
+                Du
+              </label>
+              <input
+                id="dateDebut"
+                type="date"
+                value={periode.debut}
+                onChange={(e) => setPeriode((p) => ({ ...p, debut: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500" htmlFor="dateFin">
+                Au
+              </label>
+              <input
+                id="dateFin"
+                type="date"
+                value={periode.fin}
+                onChange={(e) => setPeriode((p) => ({ ...p, fin: e.target.value }))}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => voir(periode.debut, periode.fin)}
+              className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800"
+            >
+              Afficher
+            </button>
+            {!surUnJour || debut !== aujourdhui ? (
+              <button
+                type="button"
+                onClick={() => voir(aujourdhui, aujourdhui)}
+                className="rounded-md border border-slate-300 px-4 py-1.5 text-sm hover:bg-slate-50"
+              >
+                Aujourd&apos;hui
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Le total ne vaut que pour la periode affichee : la nommer a cote evite
+            de le lire comme le total de toutes les depenses. */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <h2 className="font-semibold">{libellePeriode}</h2>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">Total : {total.toLocaleString("fr-FR")} F</span>
+            <span className="text-sm text-slate-500">
+              {expenses.length} dépense{expenses.length > 1 ? "s" : ""} · Total :{" "}
+              {total.toLocaleString("fr-FR")} F
+            </span>
             {expenses.length > 0 && (
               <button
                 type="button"
@@ -214,7 +294,7 @@ export function ExpenseManager({ expenses }: { expenses: Expense[] }) {
             {expenses.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-4 text-center text-slate-400">
-                  Aucune dépense enregistrée.
+                  {surUnJour ? "Aucune dépense ce jour-là." : "Aucune dépense sur cette période."}
                 </td>
               </tr>
             )}
