@@ -6,7 +6,7 @@ import { ChartCard } from "@/components/chart-card";
 import { StatTile } from "@/components/stat-tile";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import { downloadCsv } from "@/lib/csv";
-import { formatFCFA, formatSignedFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA, formatSignedFCFA } from "@/lib/format";
 import type { ComptabiliteData } from "@/lib/comptabilite";
 
 /** Deux valeurs qui composent un tout : une jauge, pas un camembert à deux parts. */
@@ -72,7 +72,7 @@ export function VoletVersements({ data }: { data: ComptabiliteData }) {
       ],
       ...versements.map((v) => [
         v.cashierName,
-        v.closedAt ? new Date(v.closedAt).toLocaleString("fr-FR") : "",
+        v.closedAt ? formatDateHeure(v.closedAt) : "",
         v.openingFloat,
         v.totalCash,
         v.totalWave,
@@ -233,7 +233,7 @@ export function VoletVersements({ data }: { data: ComptabiliteData }) {
                 <tr key={v.id} className="border-t border-slate-100">
                   <td className="py-2 pr-3 font-medium">{v.cashierName}</td>
                   <td className="whitespace-nowrap py-2 pr-3">
-                    {v.closedAt ? new Date(v.closedAt).toLocaleString("fr-FR") : "-"}
+                    {v.closedAt ? formatDateHeure(v.closedAt) : "-"}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">{formatFCFA(v.openingFloat)}</td>
                   <td className="py-2 pr-3">{formatFCFA(v.totalCash)}</td>

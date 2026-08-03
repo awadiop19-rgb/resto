@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { downloadCsv } from "@/lib/csv";
+import { formatDate } from "@/lib/format";
 
 type Expense = {
   id: string;
@@ -45,7 +46,7 @@ export function ComptabiliteDepenses({
     const rows: (string | number)[][] = [
       ["Date", "Libellé", "Catégorie", "Montant (F)", "Ajouté par"],
       ...expenses.map((e) => [
-        new Date(e.date).toLocaleDateString("fr-FR"),
+        formatDate(e.date),
         e.label,
         e.category,
         e.amount,
@@ -127,7 +128,7 @@ export function ComptabiliteDepenses({
           <tbody>
             {expenses.map((expense) => (
               <tr key={expense.id} className="border-t border-slate-100">
-                <td className="py-2 pr-2">{new Date(expense.date).toLocaleDateString("fr-FR")}</td>
+                <td className="py-2 pr-2">{formatDate(expense.date)}</td>
                 <td className="py-2 pr-2">{expense.label}</td>
                 <td className="py-2 pr-2">{expense.category}</td>
                 <td className="py-2 pr-2">{expense.amount.toLocaleString("fr-FR")} F</td>

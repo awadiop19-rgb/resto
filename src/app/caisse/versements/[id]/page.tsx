@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { prisma } from "@/lib/prisma";
 import { CHART } from "@/lib/chart-theme";
-import { formatFCFA, formatSignedFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
 import { ExportVersementButton, type LigneEncaissement } from "./export-button";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +68,7 @@ export default async function VersementDetailPage({ params }: { params: Promise<
   const partWave = totalEncaisse > 0 ? (totalWave / totalEncaisse) * 100 : 0;
 
   const lignes: LigneEncaissement[] = versement.payments.map((p) => ({
-    heure: new Date(p.createdAt).toLocaleString("fr-FR"),
+    heure: formatDateHeure(p.createdAt),
     commande: p.order.tableNumber
       ? `Table ${p.order.tableNumber}`
       : (p.order.customerName ?? "Commande en ligne"),
@@ -80,8 +80,8 @@ export default async function VersementDetailPage({ params }: { params: Promise<
   const enteteCsv: (string | number)[][] = [
     ["Versement", versement.id],
     ["Caissier", versement.cashier.name],
-    ["Ouverture", new Date(versement.openedAt).toLocaleString("fr-FR")],
-    ["Fermeture", versement.closedAt ? new Date(versement.closedAt).toLocaleString("fr-FR") : "En cours"],
+    ["Ouverture", formatDateHeure(versement.openedAt)],
+    ["Fermeture", versement.closedAt ? formatDateHeure(versement.closedAt) : "En cours"],
     ["Fond de caisse", versement.openingFloat],
     ["Encaissé espèces", totalCash],
     ["Encaissé Wave", totalWave],
@@ -103,8 +103,8 @@ export default async function VersementDetailPage({ params }: { params: Promise<
             <div>
               <h1 className="text-2xl font-semibold">Versement de {versement.cashier.name}</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Caisse ouverte le {new Date(versement.openedAt).toLocaleString("fr-FR")}
-                {versement.closedAt && ` · clôturée le ${new Date(versement.closedAt).toLocaleString("fr-FR")}`}
+                Caisse ouverte le {formatDateHeure(versement.openedAt)}
+                {versement.closedAt && ` · clôturée le ${formatDateHeure(versement.closedAt)}`}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -241,7 +241,7 @@ export default async function VersementDetailPage({ params }: { params: Promise<
                 <p className="mt-1">{versement.correctionNote}</p>
                 <p className="mt-1 text-xs text-amber-700">
                   par {versement.correctedBy?.name} le{" "}
-                  {versement.correctedAt ? new Date(versement.correctedAt).toLocaleString("fr-FR") : ""}
+                  {versement.correctedAt ? formatDateHeure(versement.correctedAt) : ""}
                 </p>
               </div>
             )}
@@ -267,10 +267,7 @@ export default async function VersementDetailPage({ params }: { params: Promise<
                 {versement.payments.map((p) => (
                   <tr key={p.id} className="border-t border-slate-100 align-top">
                     <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
-                      {new Date(p.createdAt).toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatHeure(p.createdAt)}
                     </td>
                     <td className="py-2 pr-3 font-medium">
                       {p.order.tableNumber

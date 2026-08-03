@@ -7,7 +7,7 @@ import { StatTile } from "@/components/stat-tile";
 import { corrigerModePaiement } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
-import { formatFCFA, formatSignedFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
 import { TYPE_CLASSES, TYPE_LABELS } from "@/lib/libelles-commande";
 import type {
   CaisseJournee,
@@ -15,9 +15,6 @@ import type {
   EncaissementLigne,
   JourneeComptable,
 } from "@/lib/journee-comptable";
-
-const heure = (date: Date) =>
-  new Date(date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 const MODE_LABELS = { CASH: "Espèces", WAVE: "Wave" } as const;
 
@@ -137,10 +134,10 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
             {caisse.joursEcoules > 0 && ` (${caisse.joursEcoules} j)`}
           </Badge>
         ) : caisse.ouverte ? (
-          <Badge tone="ouverte">Ouverte depuis {heure(caisse.openedAt)}</Badge>
+          <Badge tone="ouverte">Ouverte depuis {formatHeure(caisse.openedAt)}</Badge>
         ) : (
           <Badge tone="fermee">
-            Versée à {caisse.closedAt ? heure(caisse.closedAt) : "-"}
+            Versée à {caisse.closedAt ? formatHeure(caisse.closedAt) : "-"}
             {/* Un service qui déborde sur le lendemain : sans le jour d'ouverture,
                 le versement paraîtrait porter sur la seule journée en cours. */}
             {caisse.ouverteAvantLaJournee && ` · ouverte ${caisse.jourLabel}`}
@@ -208,7 +205,7 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
           <ul className="px-3 pb-3 text-sm">
             {caisse.depensesCaisse.map((d) => (
               <li key={d.id} className="flex items-baseline gap-2 border-t border-slate-100 py-1.5">
-                <span className="text-xs text-slate-500 tabular-nums">{heure(d.date)}</span>
+                <span className="text-xs text-slate-500 tabular-nums">{formatHeure(d.date)}</span>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{d.category}</span>
                 <span className="text-slate-600">{d.label}</span>
                 <span className="ml-auto font-medium tabular-nums">{formatFCFA(d.amount)}</span>
@@ -250,7 +247,7 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
               <tbody>
                 {caisse.encaissements.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100">
-                    <td className="whitespace-nowrap py-1.5 pr-3 text-slate-500">{heure(e.paidAt)}</td>
+                    <td className="whitespace-nowrap py-1.5 pr-3 text-slate-500">{formatHeure(e.paidAt)}</td>
                     <td className="py-1.5 pr-3 font-medium">{libelleCommande(e)}</td>
                     <td className="py-1.5 pr-3">
                       <span className={`rounded px-1.5 py-0.5 text-xs ${TYPE_CLASSES[e.type]}`}>
@@ -269,7 +266,7 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
                           corrigé depuis {MODE_LABELS[e.correction.modeOrigine]}
                           {e.correction.motif && ` · ${e.correction.motif}`}
                           {e.correction.auteur && ` · ${e.correction.auteur}`} ·{" "}
-                          {heure(e.correction.date)}
+                          {formatHeure(e.correction.date)}
                         </p>
                       )}
                     </td>
@@ -350,9 +347,9 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
         caissier.caisses.flatMap((caisse) =>
           caisse.encaissements.map((e) => [
             caissier.cashierName,
-            new Date(caisse.openedAt).toLocaleString("fr-FR"),
+            formatDateHeure(caisse.openedAt),
             caisse.enRetard ? "Non clôturée" : caisse.ouverte ? "Ouverte" : "Versée",
-            new Date(e.paidAt).toLocaleString("fr-FR"),
+            formatDateHeure(e.paidAt),
             libelleCommande(e),
             TYPE_LABELS[e.type],
             MODE_LABELS[e.method],
@@ -474,7 +471,7 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
             <tbody>
               {commandesAEncaisser.map((c) => (
                 <tr key={c.id} className="border-t border-slate-100">
-                  <td className="whitespace-nowrap py-2 pr-3 text-slate-500">{heure(c.createdAt)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-slate-500">{formatHeure(c.createdAt)}</td>
                   <td className="py-2 pr-3 font-medium">{libelleCommande(c)}</td>
                   <td className="py-2 pr-3">
                     <span className={`rounded px-1.5 py-0.5 text-xs ${TYPE_CLASSES[c.type]}`}>
@@ -487,7 +484,7 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
                   <td className="py-2 pr-3">
                     {c.waveDeclaredAt ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                        Déclaré {heure(c.waveDeclaredAt)}
+                        Déclaré {formatHeure(c.waveDeclaredAt)}
                         {c.waveReference && ` · ${c.waveReference}`}
                       </span>
                     ) : (

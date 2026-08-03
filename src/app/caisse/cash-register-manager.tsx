@@ -6,7 +6,7 @@ import { openCashRegister, payOrder } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
 import type { PaymentMethod } from "@/generated/prisma/client";
 import { CHART } from "@/lib/chart-theme";
-import { formatFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA, formatHeure } from "@/lib/format";
 import { SOURCE_LABELS } from "@/lib/libelles-commande";
 import { totalCommande } from "@/lib/total-commande";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
@@ -116,15 +116,12 @@ function TableauAEncaisser({
                     <td className="py-2 pr-2">
                       {libelleCommande(order)}
                       <div className="text-xs text-slate-400">
-                        {new Date(order.createdAt).toLocaleString("fr-FR")}
+                        {formatDateHeure(order.createdAt)}
                       </div>
                       {order.waveDeclaredAt && (
                         <div className="mt-1 rounded-md bg-sky-50 px-2 py-1 text-xs text-sky-800">
                           <span className="font-semibold">Paiement Wave annoncé</span> à{" "}
-                          {new Date(order.waveDeclaredAt).toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatHeure(order.waveDeclaredAt)}
                           {order.waveReference && (
                             <>
                               {" · "}
@@ -285,7 +282,7 @@ export function CashRegisterManager({
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Caisse ouverte</h2>
             <span className="text-xs text-slate-500">
-              Depuis {new Date(cashRegister.openedAt).toLocaleString("fr-FR")}
+              Depuis {formatDateHeure(cashRegister.openedAt)}
             </span>
           </div>
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -413,10 +410,7 @@ export function CashRegisterManager({
               {paidOrders.map((order) => (
                 <tr key={order.paymentId} className="border-t border-slate-100 align-top">
                   <td className="whitespace-nowrap py-2 pr-2 text-slate-500 tabular-nums">
-                    {new Date(order.paidAt).toLocaleTimeString("fr-FR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatHeure(order.paidAt)}
                   </td>
                   <td className="py-2 pr-2 font-medium">{libelleCommande(order)}</td>
                   <td className="py-2 pr-2 text-slate-600">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { correctCashRegister } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
-import { formatSignedFCFA } from "@/lib/format";
+import { formatDate, formatDateHeure, formatSignedFCFA } from "@/lib/format";
 import type { CashRegisterStatus } from "@/generated/prisma/client";
 
 type CashRegister = {
@@ -63,8 +63,8 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
       ],
       ...filtered.map((c) => [
         c.cashier.name,
-        new Date(c.openedAt).toLocaleString("fr-FR"),
-        c.closedAt ? new Date(c.closedAt).toLocaleString("fr-FR") : "",
+        formatDateHeure(c.openedAt),
+        c.closedAt ? formatDateHeure(c.closedAt) : "",
         c.openingFloat,
         c.totalCash ?? "",
         c.totalWave ?? "",
@@ -165,9 +165,9 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
             {filtered.map((c) => (
               <tr key={c.id} className="border-t border-slate-100 align-top">
                 <td className="py-2 pr-2">{c.cashier.name}</td>
-                <td className="py-2 pr-2 whitespace-nowrap">{new Date(c.openedAt).toLocaleString("fr-FR")}</td>
+                <td className="py-2 pr-2 whitespace-nowrap">{formatDateHeure(c.openedAt)}</td>
                 <td className="py-2 pr-2 whitespace-nowrap">
-                  {c.closedAt ? new Date(c.closedAt).toLocaleString("fr-FR") : "-"}
+                  {c.closedAt ? formatDateHeure(c.closedAt) : "-"}
                 </td>
                 <td className="py-2 pr-2">{c.openingFloat.toLocaleString("fr-FR")} F</td>
                 <td className="py-2 pr-2">{c.totalCash != null ? `${c.totalCash.toLocaleString("fr-FR")} F` : "-"}</td>
@@ -214,7 +214,7 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
                       <div className="text-slate-500">{c.correctionNote}</div>
                       <div className="text-slate-400">
                         par {c.correctedBy?.name} le{" "}
-                        {c.correctedAt ? new Date(c.correctedAt).toLocaleDateString("fr-FR") : ""}
+                        {c.correctedAt ? formatDate(c.correctedAt) : ""}
                       </div>
                     </div>
                   ) : (

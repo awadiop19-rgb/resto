@@ -8,7 +8,7 @@ import {
   estCategorieDeCaisse,
   type CategorieDepenseCaisse,
 } from "@/lib/depenses-caisse";
-import { formatFCFA } from "@/lib/format";
+import { formatFCFA, formatHeure } from "@/lib/format";
 
 export type DepenseCaisse = {
   id: string;
@@ -175,10 +175,7 @@ export function DepensesCaisse({
               {depenses.map((d) => (
                 <tr key={d.id} className="border-t border-slate-100">
                   <td className="whitespace-nowrap py-2 pr-2 text-slate-500 tabular-nums">
-                    {new Date(d.date).toLocaleTimeString("fr-FR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatHeure(d.date)}
                   </td>
                   <td className="py-2 pr-2">{d.category}</td>
                   <td className="py-2 pr-2 text-slate-600">{d.label}</td>

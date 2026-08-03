@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { payOrder } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { CHART } from "@/lib/chart-theme";
-import { formatFCFA } from "@/lib/format";
+import { formatFCFA, formatHeure } from "@/lib/format";
 import { SOURCE_LABELS, TYPE_CLASSES, TYPE_LABELS } from "@/lib/libelles-commande";
 import { totalCommande } from "@/lib/total-commande";
 import type { OrderSource, OrderType, PaymentMethod } from "@/generated/prisma/client";
@@ -164,10 +164,7 @@ export function CommandesPassees({
               return (
                 <tr key={commande.id} className="border-t border-slate-100 align-top">
                   <td className="whitespace-nowrap py-2 pr-2 text-slate-500 tabular-nums">
-                    {new Date(commande.createdAt).toLocaleTimeString("fr-FR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatHeure(commande.createdAt)}
                   </td>
                   <td className="whitespace-nowrap py-2 pr-2">
                     <span className="text-slate-600">{SOURCE_LABELS[commande.source]}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA } from "@/lib/format";
 import type { CaisseEnRetard } from "@/lib/journee-caisse";
 import { FermetureCaisseForm } from "./fermeture-caisse-form";
 
@@ -41,7 +41,7 @@ export function CaissesEnRetard({ caisses }: { caisses: CaisseEnRetard[] }) {
               <div>
                 <h3 className="font-semibold capitalize">{caisse.jourLabel}</h3>
                 <p className="text-xs text-slate-500">
-                  Ouverte le {new Date(caisse.openedAt).toLocaleString("fr-FR")} · restée ouverte depuis{" "}
+                  Ouverte le {formatDateHeure(caisse.openedAt)} · restée ouverte depuis{" "}
                   {joursEcoules} jour{joursEcoules > 1 ? "s" : ""}
                 </p>
               </div>

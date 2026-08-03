@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { assignerLivreur, retirerLivreur } from "@/lib/actions/livraison";
 import { assurerSucces } from "@/lib/actions/resultat";
-import { formatFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA } from "@/lib/format";
 import {
   DELIVERY_CLASSES,
   DELIVERY_LABELS,
@@ -293,7 +293,7 @@ export function LivraisonsManager({
                   )}
                   <p className="mt-1 text-sm text-slate-500">{commande.articles}</p>
                   <p className="mt-1 text-xs text-slate-400">
-                    Reçue le {new Date(commande.createdAt).toLocaleString("fr-FR")}
+                    Reçue le {formatDateHeure(commande.createdAt)}
                   </p>
                 </div>
 
@@ -363,7 +363,7 @@ export function LivraisonsManager({
                     <td className="py-2 pr-3">{c.customerName ?? "Client"}</td>
                     <td className="py-2 pr-3">{c.livreur?.name ?? "—"}</td>
                     <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
-                      {c.deliveredAt ? new Date(c.deliveredAt).toLocaleString("fr-FR") : "—"}
+                      {c.deliveredAt ? formatDateHeure(c.deliveredAt) : "—"}
                     </td>
                     <td className="py-2 pr-3 text-right font-semibold tabular-nums">
                       {formatFCFA(c.total)}

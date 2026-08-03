@@ -6,7 +6,7 @@ import { ChartCard } from "@/components/chart-card";
 import { StatTile } from "@/components/stat-tile";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import { downloadCsv } from "@/lib/csv";
-import { formatFCFA } from "@/lib/format";
+import { formatDate, formatFCFA } from "@/lib/format";
 import type { ComptabiliteData } from "@/lib/comptabilite";
 
 export function VoletDepenses({ data }: { data: ComptabiliteData }) {
@@ -18,7 +18,7 @@ export function VoletDepenses({ data }: { data: ComptabiliteData }) {
     const rows: (string | number)[][] = [
       ["Date", "Libellé", "Catégorie", "Montant (F)", "Saisie par"],
       ...depenses.map((e) => [
-        new Date(e.date).toLocaleDateString("fr-FR"),
+        formatDate(e.date),
         e.label,
         e.category,
         e.amount,
@@ -152,7 +152,7 @@ export function VoletDepenses({ data }: { data: ComptabiliteData }) {
               {depenses.map((e) => (
                 <tr key={e.id} className="border-t border-slate-100">
                   <td className="whitespace-nowrap py-2 pr-3">
-                    {new Date(e.date).toLocaleDateString("fr-FR")}
+                    {formatDate(e.date)}
                   </td>
                   <td className="py-2 pr-3">{e.label}</td>
                   <td className="py-2 pr-3 text-slate-500">{e.category}</td>

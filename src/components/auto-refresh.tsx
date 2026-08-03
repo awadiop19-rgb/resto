@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { formatHeurePrecise } from "@/lib/format";
 
 /**
  * Rafraîchit périodiquement les Server Components de la page en cours.
@@ -48,7 +49,7 @@ export function AutoRefresh({ intervalMs = 15000 }: { intervalMs?: number }) {
       {isPending
         ? "Mise à jour…"
         : lastRefresh
-          ? `À jour · ${lastRefresh.toLocaleTimeString("fr-FR")}`
+          ? `À jour · ${formatHeurePrecise(lastRefresh)}`
           : "Mise à jour automatique"}
     </span>
   );

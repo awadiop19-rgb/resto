@@ -14,7 +14,7 @@ import {
 import { ChartCard } from "@/components/chart-card";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import { downloadCsv } from "@/lib/csv";
-import { formatFCFA } from "@/lib/format";
+import { formatDate, formatFCFA } from "@/lib/format";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { supprimerMouvement } from "@/lib/actions/stock";
 import { formatQuantite, formatQuantiteSignee, libelleType } from "@/lib/stock";
@@ -49,7 +49,7 @@ export function VoletMouvements({ data }: { data: StockData }) {
     const rows: (string | number)[][] = [
       ["Date", "Type", "Produit", "Quantité", "Unité", "Prix unitaire (F)", "Montant (F)", "Fournisseur", "Note", "Saisi par"],
       ...visibles.map((m) => [
-        new Date(m.date).toLocaleDateString("fr-FR"),
+        formatDate(m.date),
         libelleType(m.type),
         m.productName,
         m.quantity,
@@ -201,7 +201,7 @@ export function VoletMouvements({ data }: { data: StockData }) {
               {visibles.map((m) => (
                 <tr key={m.id} className="border-t border-slate-100">
                   <td className="py-2 pr-3 whitespace-nowrap">
-                    {new Date(m.date).toLocaleDateString("fr-FR")}
+                    {formatDate(m.date)}
                   </td>
                   <td className={`py-2 pr-3 font-medium ${TEINTE_TYPE[m.type]}`}>
                     {libelleType(m.type)}

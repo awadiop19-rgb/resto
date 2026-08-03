@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { avancerLivraison } from "@/lib/actions/livraison";
 import { assurerSucces } from "@/lib/actions/resultat";
-import { formatFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA } from "@/lib/format";
 import { DELIVERY_CLASSES, DELIVERY_LABELS } from "@/lib/libelles-commande";
 import type { DeliveryStatus } from "@/generated/prisma/client";
 
@@ -173,7 +173,7 @@ export function MesLivraisons({
                   <span className="text-slate-600">{c.customerName ?? "Client"}</span>
                 </span>
                 <span className="text-xs text-slate-400">
-                  {c.deliveredAt ? new Date(c.deliveredAt).toLocaleString("fr-FR") : ""}
+                  {c.deliveredAt ? formatDateHeure(c.deliveredAt) : ""}
                 </span>
                 <span className="font-semibold tabular-nums">{formatFCFA(c.total)}</span>
               </li>

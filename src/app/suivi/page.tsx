@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { prisma } from "@/lib/prisma";
-import { formatFCFA } from "@/lib/format";
+import { formatDateHeure, formatFCFA } from "@/lib/format";
 import { sousTotal, totalCommande } from "@/lib/total-commande";
 import { PaiementWave } from "@/components/paiement-wave";
 import { normaliserReference } from "@/lib/reference-commande";
@@ -96,7 +96,7 @@ export default async function SuiviPage({
                       {TYPE_LABELS[commande.type]}
                     </span>
                     <p className="mt-1 text-xs text-slate-400">
-                      {new Date(commande.createdAt).toLocaleString("fr-FR")}
+                      {formatDateHeure(commande.createdAt)}
                     </p>
                   </div>
                 </div>

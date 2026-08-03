@@ -17,6 +17,7 @@ import {
   TYPE_CLASSES,
   TYPE_LABELS,
 } from "@/lib/libelles-commande";
+import { formatDateHeure } from "@/lib/format";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   EN_ATTENTE: "En attente",
@@ -235,7 +236,7 @@ export function OrderBoard({
           .map((i) => `${i.quantity}x ${i.menuItem.name}${i.note ? ` (${i.note})` : ""}`)
           .join(" | ");
         return [
-          new Date(order.createdAt).toLocaleString("fr-FR"),
+          formatDateHeure(order.createdAt),
           order.reference ?? "",
           SOURCE_LABELS[order.source],
           TYPE_LABELS[order.type],
@@ -480,7 +481,7 @@ export function OrderBoard({
                     </p>
                   )}
                   <p className="text-xs text-slate-400">
-                    {new Date(order.createdAt).toLocaleString("fr-FR")}
+                    {formatDateHeure(order.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
