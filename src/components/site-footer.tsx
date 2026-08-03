@@ -1,9 +1,20 @@
 import Link from "next/link";
+import { getReglages } from "@/lib/horaires-data";
+import { EtatOuverture, HorairesSemaine } from "@/components/horaires-publics";
 
-export function SiteFooter() {
+/**
+ * Les horaires sont lus en base, plus ecrits en dur.
+ *
+ * Ce pied de page annoncait « Ouvert tous les jours · 11h00 – 23h00 » alors que
+ * la maison ferme le dimanche et ouvre a 8h : un client s'y fiait pour rien. Une
+ * ligne figee finit toujours par mentir le jour ou l'horaire change.
+ */
+export async function SiteFooter() {
+  const reglages = await getReglages();
+
   return (
     <footer id="contact" className="border-t border-encre/10 bg-encre text-slate-300">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-3">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="text-lg font-semibold text-white">
             <span className="text-orange-500">Saveur</span> Amir
@@ -16,7 +27,15 @@ export function SiteFooter() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Adresse</p>
           <p className="mt-2 text-sm">Rufisque, Sénégal</p>
-          <p className="mt-1 text-sm">Ouvert tous les jours · 11h00 – 23h00</p>
+        </div>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Horaires</p>
+          <div className="mt-2">
+            <HorairesSemaine reglages={reglages} ton="sombre" />
+          </div>
+          <div className="mt-3">
+            <EtatOuverture reglages={reglages} ton="sombre" />
+          </div>
         </div>
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-orange-500">Contact</p>

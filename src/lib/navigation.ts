@@ -28,6 +28,7 @@ export type NomIcone =
   | "journee"
   | "mois"
   | "utilisateurs"
+  | "horaires"
   | "profil";
 
 export type LienNav = { href: string; label: string; icone: NomIcone };
@@ -78,6 +79,7 @@ export const NAVIGATION: Record<string, Navigation> = {
         titre: "Administration",
         liens: [
           { href: "/utilisateurs", label: "Utilisateurs", icone: "utilisateurs" },
+          { href: "/horaires", label: "Horaires d'ouverture", icone: "horaires" },
           PROFIL,
         ],
       },

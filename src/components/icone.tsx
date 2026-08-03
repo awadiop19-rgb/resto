@@ -95,6 +95,15 @@ const TRACES: Record<NomIcone, React.ReactNode> = {
       <path d="M16 5.5a3.5 3.5 0 0 1 0 6.8M17.5 20c0-2.6-.9-4.4-2.3-5.3" />
     </>
   ),
+  // Une devanture plutot qu'une horloge : `journee` en est deja une, et deux
+  // cadrans voisins dans le meme rail ne se distingueraient plus.
+  horaires: (
+    <>
+      <path d="M5.5 4h13L21 8.5H3z" />
+      <path d="M5 8.5V20h14V8.5" />
+      <path d="M10 20v-4.5h4V20" />
+    </>
+  ),
   profil: (
     <>
       <circle cx="12" cy="9" r="3.5" />

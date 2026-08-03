@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { EtatOuverture, HorairesSemaine } from "@/components/horaires-publics";
+import { getReglages } from "@/lib/horaires-data";
 
 function formatFCFA(value: number) {
   return `${value.toLocaleString("fr-FR")} F`;
@@ -56,10 +58,13 @@ const features = [
 ];
 
 export default async function Home() {
-  const categories = await prisma.menuCategory.findMany({
-    include: { items: { where: { available: true }, orderBy: { name: "asc" } } },
-    orderBy: { name: "asc" },
-  });
+  const [categories, reglages] = await Promise.all([
+    prisma.menuCategory.findMany({
+      include: { items: { where: { available: true }, orderBy: { name: "asc" } } },
+      orderBy: { name: "asc" },
+    }),
+    getReglages(),
+  ]);
   const categoriesWithItems = categories.filter((category) => category.items.length > 0);
 
   return (
@@ -174,6 +179,20 @@ export default async function Home() {
                 « Chaque plat raconte une histoire — celle de nos racines et de notre passion
                 pour bien recevoir. »
               </blockquote>
+              {/* Les horaires au corps de la page, pas seulement en pied : c'est
+                  la premiere chose qu'on cherche avant de se deplacer. */}
+              <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">
+                    Nos horaires
+                  </p>
+                  <EtatOuverture reglages={reglages} />
+                </div>
+                <div className="mt-3">
+                  <HorairesSemaine reglages={reglages} />
+                </div>
+              </div>
+
               <div className="mt-6">
                 <Link
                   href="/commander"

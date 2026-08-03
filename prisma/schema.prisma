@@ -89,6 +89,8 @@ model User {
   correctedPayments      Payment[]      @relation("PaymentMethodCorrector")
   cashRegisters          CashRegister[] @relation("CashRegisterCashier")
   correctedCashRegisters CashRegister[] @relation("CashRegisterCorrector")
+  openingHours           OpeningHour[]
+  closures               ExceptionalClosure[]
 }
 
 // Zone de livraison : un tarif unique pour tous les quartiers qu'elle regroupe.
@@ -311,4 +313,56 @@ model Payment {
   methodCorrectedById  String?
   methodCorrectedBy    User?          @relation("PaymentMethodCorrector", fields: [methodCorrectedById], references: [id])
   methodCorrectedAt    DateTime?
+}
+
+// Heures d'ouverture de la commande en ligne, un enregistrement par jour de la
+// semaine. C'est la seule chose qu'elles gouvernent : le service en salle et la
+// prise de commande au comptoir n'en dependent pas, un client attable a 23h30
+// doit toujours pouvoir etre encaisse.
+//
+// Les heures sont stockees en minutes depuis minuit plutot qu'en texte : la
+// comparaison « sommes-nous ouverts ? » se fait alors sur deux entiers, sans
+// analyser « 08:00 » a chaque commande ni dependre d'un format local.
+model OpeningHour {
+  id String @id @default(cuid())
+
+  // 0 = dimanche … 6 = samedi, comme `Date.getDay()`, pour qu'aucune conversion
+  // ne s'intercale entre l'heure du serveur et la ligne lue ici.
+  weekday Int @unique
+
+  closed   Boolean @default(false)
+  opensAt  Int     @default(480)
+  closesAt Int     @default(1380)
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+}
+
+// Fermeture exceptionnelle : un jour ferie, des conges, une fermeture technique.
+// Elle prime sur la grille hebdomadaire — un 4 avril tombant un mardi ferme la
+// commande en ligne meme si tous les mardis sont ouverts.
+//
+// Les bornes sont des jours de calendrier, pas des instants, et sont donc
+// stockees en `YYYY-MM-DD` plutot qu'en DateTime. Un DateTime porterait une heure
+// et un fuseau : « ferme le 15 aout » deviendrait « ferme du 14 a 23h au 15 a
+// 23h » des que le serveur et la base ne s'accordent pas sur minuit. Un texte
+// ISO se compare tel quel, dans l'ordre alphabetique, et ne se decale jamais.
+model ExceptionalClosure {
+  id String @id @default(cuid())
+
+  /// Premier et dernier jour fermes, tous deux inclus. Une fermeture d'un seul
+  /// jour porte la meme valeur des deux cotes.
+  startDate String
+  endDate   String
+
+  /// Montre au client tel quel : « Tabaski », « Congés annuels ». Facultatif —
+  /// un restaurant ne doit pas justifier sa fermeture pour pouvoir la declarer.
+  reason String?
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+
+  @@index([startDate])
 }

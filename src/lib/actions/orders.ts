@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { OrderStatus, Role } from "@/generated/prisma/client";
 import { blocageCaisse } from "@/lib/journee-caisse";
+import { blocageCommandeEnLigne } from "@/lib/horaires-data";
 import { premierMessage, refus } from "@/lib/actions/resultat";
 import { genererReference } from "@/lib/reference-commande";
 import { tarifDuQuartier } from "@/lib/zones-livraison";
@@ -164,6 +165,13 @@ const publicOrderSchema = z
   );
 
 export async function createPublicOrder(input: z.infer<typeof publicOrderSchema>) {
+  // Avant toute chose : hors des heures d'ouverture, la commande en ligne n'est
+  // pas prise. La page se ferme deja d'elle-meme, mais elle peut avoir ete
+  // ouverte avant l'heure de fermeture et rester affichee — sans cette barriere,
+  // le formulaire resterait actif pour qui l'a sous les yeux.
+  const ferme = await blocageCommandeEnLigne();
+  if (ferme) return refus(ferme);
+
   const parsed = publicOrderSchema.safeParse(input);
   if (!parsed.success) return refus(premierMessage(parsed.error));
   const data = parsed.data;
