@@ -93,7 +93,7 @@ export default async function Home() {
             </h1>
             <p className="mt-4 max-w-xl text-lg text-slate-300">
               Une cuisine généreuse entre traditions sénégalaises et classiques européens,
-              préparée avec des produits frais, au cœur de Dakar.
+              préparée avec des produits frais, au cœur de Rufisque.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
