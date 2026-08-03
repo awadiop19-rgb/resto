@@ -6,6 +6,9 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   DATABASE_URL = "file:/data/dev.db"
+  # Le découpage des journées et des mois comptables suit GMT, le fuseau de Dakar,
+  # sans dépendre de la région où tourne la machine.
+  TZ = "UTC"
 
 [[mounts]]
   source = "resto_data"

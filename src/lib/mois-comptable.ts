@@ -25,6 +25,10 @@ import { JOURS_AVANT_PROJECTION, niveauPourTaux, SEUILS } from "@/lib/mois-verdi
 export type MoisComptable = Awaited<ReturnType<typeof getMoisComptable>>;
 
 export async function getMoisComptable(maintenant = new Date()) {
+  // Bornes lues dans le fuseau du serveur, que `instrumentation.ts` fixe à GMT :
+  // c'est celui de Dakar, et celui dans lequel les dépenses saisies au jour sont
+  // enregistrées. Sans cette garantie, le 1er du mois basculerait dans le mois
+  // précédent et sortirait du total.
   const debut = startOfMonth(maintenant);
   const finDuMois = endOfMonth(maintenant);
 
