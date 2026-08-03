@@ -242,7 +242,7 @@ export function VersementsManager({ cashRegisters }: { cashRegisters: CashRegist
                           <button
                             disabled={isPending}
                             onClick={() => submitCorrection(c.id)}
-                            className="rounded-md bg-black px-2 py-1 text-xs text-white hover:bg-neutral-800 disabled:opacity-50"
+                            className="rounded-md bg-slate-900 px-2 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-50"
                           >
                             Enregistrer
                           </button>

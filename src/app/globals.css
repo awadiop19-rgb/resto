@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/**
+ * Jetons de l'application.
+ *
+ * Les neutres sont tires vers le chaud plutot que vers le bleu : sur un ecran de
+ * comptoir en plein jour, un gris froid vire au sale. Ils remplacent l'echelle
+ * `slate` de Tailwind au lieu de s'ajouter a cote — les ecrans l'emploient deja
+ * partout, et une seconde echelle en parallele aurait fait cohabiter deux gris.
+ *
+ * L'orange reste l'accent unique de la maison. Le vert, l'ambre et le rouge sont
+ * reserves a l'etat (ecart de caisse, palier du mois) et vivent dans
+ * `chart-theme.ts`, ou leur contraste a ete valide en vision daltonienne.
+ */
+@theme {
+  --color-slate-50: #f6f3ee;
+  --color-slate-100: #efeae2;
+  --color-slate-200: #e5dfd5;
+  --color-slate-300: #d5ccbe;
+  --color-slate-400: #9a9186;
+  --color-slate-500: #857c71;
+  --color-slate-600: #6e665c;
+  --color-slate-700: #4a443c;
+  --color-slate-800: #2e2a25;
+  --color-slate-900: #1b1815;
+
+  /*
+   * La rampe est reprise en entier, pas seulement autour du 500. Les teintes
+   * claires servent de fond aux pastilles et aux panneaux d'alerte, ou elles
+   * touchent une bordure `orange-500` : laissees a la valeur par defaut de
+   * Tailwind, plus jaune, elles jurent avec l'accent au lieu de l'accompagner.
+   * `bg-orange-100` / `text-orange-700` garde 4,6:1 — au-dessus du seuil AA.
+   */
+  --color-orange-50: #fdf4ef;
+  --color-orange-100: #fbe4d7;
+  --color-orange-200: #f6c7ae;
+  --color-orange-300: #f7a67c;
+  --color-orange-400: #f5854f;
+  --color-orange-500: #eb6834;
+  --color-orange-600: #d4541f;
+  --color-orange-700: #b04519;
+  --color-orange-800: #8c3916;
+  --color-orange-900: #733212;
+
+  /* Fond des rails et des barres de navigation : une encre, pas un noir pur. */
+  --color-encre: #1b1815;
+  --color-encre-profonde: #100e0c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/**
+ * La police est celle chargee par `layout.tsx`.
+ *
+ * Une regle `body { font-family: Arial }` vivait ici et gagnait contre Geist,
+ * pourtant telechargee a chaque visite : l'application entiere s'affichait dans
+ * la police de secours, montants compris. Rien ne remplace donc plus la pile par
+ * defaut de Tailwind, qui pointe sur `--font-sans`.
+ */
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/**
+ * Les montants s'alignent au franc pres.
+ *
+ * Sans chasse fixe, un 1 est plus etroit qu'un 8 : dans une colonne de totaux,
+ * les unites ne tombent plus les unes sous les autres et l'oeil ne peut plus
+ * comparer deux lignes sans les lire.
+ */
+@utility montant {
+  font-variant-numeric: tabular-nums;
 }

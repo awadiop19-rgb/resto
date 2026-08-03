@@ -9,7 +9,11 @@ export type StatTone = keyof typeof TONES;
 
 /**
  * Une valeur seule se lit mieux en tuile qu'en graphique à une barre.
- * Chiffres proportionnels : `tabular-nums` est réservé aux colonnes alignées.
+ *
+ * L'étiquette est d'autant plus petite et espacée que la valeur est grosse :
+ * c'est l'écart entre les deux qui fait voir le chiffre avant de lire ce qu'il
+ * mesure. Les montants passent à chasse fixe pour que deux tuiles voisines
+ * alignent leurs unités.
  */
 export function StatTile({
   label,
@@ -24,9 +28,9 @@ export function StatTile({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${TONES[tone]}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-400">{label}</p>
+      <p className={`montant mt-1.5 text-2xl font-bold tracking-tight ${TONES[tone]}`}>{value}</p>
+      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }

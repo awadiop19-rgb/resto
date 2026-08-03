@@ -18,13 +18,13 @@ export default async function CommanderPage() {
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
-      <main className="flex-1 bg-neutral-50">
+      <main className="flex-1 bg-slate-50">
         <div className="mx-auto max-w-6xl px-4 py-10">
           <div className="mb-8">
             <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">
               Commander en ligne
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-black">
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">
               Composez votre commande, <span className="text-orange-600">Saveur Amir</span>{" "}
               s&apos;occupe du reste
             </h1>

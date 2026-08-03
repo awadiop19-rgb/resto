@@ -188,7 +188,7 @@ export function ExpenseManager({
           <button
             disabled={isPending}
             onClick={() => submit()}
-            className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50 sm:col-span-1"
+            className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50 sm:col-span-1"
           >
             Ajouter
           </button>
@@ -225,7 +225,7 @@ export function ExpenseManager({
             <button
               type="button"
               onClick={() => voir(periode.debut, periode.fin)}
-              className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800"
+              className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800"
             >
               Afficher
             </button>

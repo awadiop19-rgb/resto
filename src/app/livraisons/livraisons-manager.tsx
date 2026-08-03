@@ -192,7 +192,7 @@ export function LivraisonsManager({
               type="button"
               disabled={isPending || selection.size === 0 || !livreurChoisi}
               onClick={affecter}
-              className="min-h-10 rounded-md bg-black px-4 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-40"
+              className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-40"
             >
               {isPending ? "Affectation…" : "Confier la tournée"}
             </button>

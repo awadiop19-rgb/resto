@@ -271,7 +271,7 @@ export function CashRegisterManager({
             <button
               disabled={isPending}
               onClick={handleOpen}
-              className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+              className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
             >
               Ouvrir la caisse
             </button>

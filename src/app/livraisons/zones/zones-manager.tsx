@@ -102,7 +102,7 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
             type="button"
             disabled={isPending}
             onClick={ajouterZone}
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-40"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-40"
           >
             Créer la zone
           </button>
@@ -140,7 +140,7 @@ export function ZonesManager({ zones }: { zones: Zone[] }) {
                   type="button"
                   disabled={isPending}
                   onClick={() => enregistrerZone(zone.id)}
-                  className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-40"
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
                 >
                   Enregistrer
                 </button>

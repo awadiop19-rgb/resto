@@ -273,7 +273,7 @@ export function OrderBoard({
                 onClick={() => setVue(v)}
                 aria-pressed={vue === v}
                 className={`min-h-10 rounded-md px-4 text-sm transition ${
-                  vue === v ? "bg-black font-medium text-white" : "text-slate-600 hover:bg-slate-50"
+                  vue === v ? "bg-slate-900 font-medium text-white" : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 {v === "photos" ? "Photos" : "Liste"}
@@ -399,7 +399,7 @@ export function OrderBoard({
               type="button"
               disabled={isPending}
               onClick={submitOrder}
-              className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+              className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {editingOrderId ? "Enregistrer" : "Envoyer"}
             </button>

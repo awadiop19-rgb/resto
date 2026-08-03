@@ -68,7 +68,7 @@ export default async function Home() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="relative overflow-hidden bg-black text-white">
+        <section className="relative overflow-hidden bg-slate-900 text-white">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/dishes/thieboudienne.webp"
@@ -91,14 +91,14 @@ export default async function Home() {
               </span>{" "}
               Amir
             </h1>
-            <p className="mt-4 max-w-xl text-lg text-neutral-300">
+            <p className="mt-4 max-w-xl text-lg text-slate-300">
               Une cuisine généreuse entre traditions sénégalaises et classiques européens,
               préparée avec des produits frais, au cœur de Dakar.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 href="/commander"
-                className="rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-black shadow-lg shadow-orange-500/20 transition hover:bg-orange-400"
+                className="rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-orange-500/20 transition hover:bg-orange-400"
               >
                 Commander en ligne
               </Link>
@@ -113,15 +113,15 @@ export default async function Home() {
         </section>
 
         {/* Features */}
-        <section className="border-b border-neutral-100 bg-white py-16">
+        <section className="border-b border-slate-100 bg-white py-16">
           <div className="mx-auto max-w-6xl px-4">
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {features.map((feature) => (
                 <div
                   key={feature.title}
-                  className="group rounded-2xl border border-neutral-200 p-6 transition hover:-translate-y-1 hover:border-orange-300 hover:shadow-lg"
+                  className="group rounded-2xl border border-slate-200 p-6 transition hover:-translate-y-1 hover:border-orange-300 hover:shadow-lg"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-orange-500 transition group-hover:bg-orange-500 group-hover:text-black">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-orange-500 transition group-hover:bg-orange-500 group-hover:text-slate-900">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
@@ -133,7 +133,7 @@ export default async function Home() {
                       {feature.icon}
                     </svg>
                   </div>
-                  <h3 className="mt-4 font-semibold text-black">{feature.title}</h3>
+                  <h3 className="mt-4 font-semibold text-slate-900">{feature.title}</h3>
                   <p className="mt-2 text-sm text-slate-500">{feature.description}</p>
                 </div>
               ))}
@@ -152,16 +152,16 @@ export default async function Home() {
                 className="h-80 w-full object-cover sm:h-104"
               />
               <div className="absolute inset-0 ring-1 ring-inset ring-black/10" />
-              <div className="absolute bottom-4 left-4 rounded-xl bg-black/80 px-4 py-3 text-white backdrop-blur">
+              <div className="absolute bottom-4 left-4 rounded-xl bg-slate-900/80 px-4 py-3 text-white backdrop-blur">
                 <p className="text-sm font-semibold text-orange-400">Depuis 2014</p>
-                <p className="text-xs text-neutral-300">Fait main, chaque jour</p>
+                <p className="text-xs text-slate-300">Fait main, chaque jour</p>
               </div>
             </div>
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">
                 Notre histoire
               </p>
-              <h2 className="mt-2 text-3xl font-bold text-black sm:text-4xl">
+              <h2 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">
                 L&apos;authenticité sénégalaise, sans frontières
               </h2>
               <p className="mt-4 text-slate-600">
@@ -170,7 +170,7 @@ export default async function Home() {
                 mafé — aux côtés de plats européens revisités. Chaque assiette est préparée sur
                 place, à partir de produits locaux et de saison.
               </p>
-              <blockquote className="mt-6 rounded-xl border-l-4 border-orange-500 bg-neutral-50 p-4 text-sm italic text-slate-600">
+              <blockquote className="mt-6 rounded-xl border-l-4 border-orange-500 bg-slate-50 p-4 text-sm italic text-slate-600">
                 « Chaque plat raconte une histoire — celle de nos racines et de notre passion
                 pour bien recevoir. »
               </blockquote>
@@ -188,13 +188,13 @@ export default async function Home() {
         </section>
 
         {/* Menu highlights */}
-        <section id="menu" className="bg-neutral-50 py-20">
+        <section id="menu" className="bg-slate-50 py-20">
           <div className="mx-auto max-w-6xl px-4">
             <div className="mb-12 text-center">
               <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">
                 Notre carte
               </p>
-              <h2 className="mt-2 text-3xl font-bold text-black sm:text-4xl">
+              <h2 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">
                 Quelques-uns de nos plats
               </h2>
               <div className="mx-auto mt-4 h-1 w-16 rounded-full bg-orange-500" />
@@ -203,17 +203,17 @@ export default async function Home() {
             <div className="space-y-14">
               {categoriesWithItems.map((category) => (
                 <div key={category.id}>
-                  <h3 className="mb-5 flex items-center gap-3 text-xl font-semibold text-black">
+                  <h3 className="mb-5 flex items-center gap-3 text-xl font-semibold text-slate-900">
                     {category.name}
-                    <span className="h-px flex-1 bg-neutral-200" />
+                    <span className="h-px flex-1 bg-slate-200" />
                   </h3>
                   <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     {category.items.map((item, index) => (
                       <div
                         key={item.id}
-                        className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+                        className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
                       >
-                        <div className="relative h-44 w-full overflow-hidden bg-linear-to-br from-black to-neutral-800">
+                        <div className="relative h-44 w-full overflow-hidden bg-linear-to-br from-encre-profonde to-slate-800">
                           {item.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -227,14 +227,14 @@ export default async function Home() {
                             </div>
                           )}
                           {index === 0 && (
-                            <span className="absolute left-3 top-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-black shadow">
+                            <span className="absolute left-3 top-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-slate-900 shadow">
                               Populaire
                             </span>
                           )}
                         </div>
                         <div className="p-4">
                           <div className="flex items-start justify-between gap-2">
-                            <h4 className="font-semibold text-black">{item.name}</h4>
+                            <h4 className="font-semibold text-slate-900">{item.name}</h4>
                             <span className="whitespace-nowrap rounded-full bg-orange-50 px-2.5 py-1 text-sm font-semibold text-orange-600">
                               {formatFCFA(item.price)}
                             </span>
@@ -253,7 +253,7 @@ export default async function Home() {
             <div className="mt-14 text-center">
               <Link
                 href="/commander"
-                className="inline-flex items-center gap-2 rounded-md bg-black px-6 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
               >
                 Passer commande maintenant
               </Link>
@@ -262,7 +262,7 @@ export default async function Home() {
         </section>
 
         {/* CTA banner */}
-        <section className="relative overflow-hidden bg-linear-to-r from-black via-neutral-900 to-orange-900">
+        <section className="relative overflow-hidden bg-linear-to-r from-encre-profonde via-slate-900 to-orange-900">
           <div
             aria-hidden
             className="absolute -left-16 -bottom-16 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl"
@@ -271,14 +271,14 @@ export default async function Home() {
             <h2 className="text-2xl font-bold text-white sm:text-3xl">
               Envie de découvrir nos saveurs ?
             </h2>
-            <p className="max-w-xl text-neutral-300">
+            <p className="max-w-xl text-slate-300">
               Commandez en ligne en quelques clics, ou venez nous rendre visite à Dakar pour
               vivre l&apos;expérience Saveur Amir.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link
                 href="/commander"
-                className="rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-orange-400"
+                className="rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-orange-400"
               >
                 Commander en ligne
               </Link>

@@ -116,7 +116,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
             aria-pressed={type === t.value}
             className={`rounded-md px-3 py-1.5 text-sm transition ${
               type === t.value
-                ? "bg-black font-medium text-white"
+                ? "bg-slate-900 font-medium text-white"
                 : "border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
@@ -244,7 +244,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
           <button
             disabled={isPending}
             onClick={soumettre}
-            className="w-full rounded-md bg-black px-4 py-1.5 text-sm text-white transition hover:bg-neutral-800 disabled:opacity-50"
+            className="w-full rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
             {isPending ? "Enregistrement…" : "Enregistrer"}
           </button>

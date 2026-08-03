@@ -55,7 +55,7 @@ export function PeriodFilter({
               aria-pressed={preset === p}
               className={`rounded-md px-3 py-1.5 text-sm transition ${
                 preset === p
-                  ? "bg-black font-medium text-white"
+                  ? "bg-slate-900 font-medium text-white"
                   : "border border-slate-200 text-slate-600 hover:bg-slate-50"
               }`}
             >

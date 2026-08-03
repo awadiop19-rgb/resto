@@ -10,12 +10,12 @@ const links = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-black/10 bg-black text-white">
+    <header className="sticky top-0 z-30 border-b border-encre/10 bg-encre text-white">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
         <Link href="/" className="text-xl font-semibold tracking-tight">
           <span className="text-orange-500">Saveur</span> Amir
         </Link>
-        <nav className="flex flex-wrap items-center gap-5 text-sm text-neutral-200">
+        <nav className="flex flex-wrap items-center gap-5 text-sm text-slate-200">
           {links.map((link) =>
             // Les ancres de la page d'accueil restent des <a> : Link ne sait pas
             // faire défiler vers un fragment de la page déjà affichée.
@@ -33,13 +33,13 @@ export function SiteHeader() {
         <div className="flex items-center gap-3">
           <Link
             href="/commander"
-            className="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-orange-400"
+            className="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-orange-400"
           >
             Commander en ligne
           </Link>
           <Link
             href="/login"
-            className="hidden text-sm text-neutral-300 transition hover:text-white sm:inline"
+            className="hidden text-sm text-slate-300 transition hover:text-white sm:inline"
           >
             Espace pro
           </Link>

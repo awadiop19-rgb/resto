@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer id="contact" className="border-t border-black/10 bg-black text-neutral-300">
+    <footer id="contact" className="border-t border-encre/10 bg-encre text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-3">
         <div>
           <p className="text-lg font-semibold text-white">
@@ -30,7 +30,7 @@ export function SiteFooter() {
           </Link>
         </div>
       </div>
-      <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-neutral-500">
+      <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-slate-500">
         © {new Date().getFullYear()} Saveur Amir — Tous droits réservés.
       </div>
     </footer>

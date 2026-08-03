@@ -219,7 +219,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
           <button
             disabled={isPending}
             onClick={submit}
-            className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
           >
             Ajouter
           </button>
@@ -297,7 +297,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
                         <button
                           disabled={isPending}
                           onClick={() => submitEdit(user.id)}
-                          className="rounded-md bg-black px-2 py-1 text-xs text-white hover:bg-neutral-800 disabled:opacity-50"
+                          className="rounded-md bg-slate-900 px-2 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-50"
                         >
                           Enregistrer
                         </button>
@@ -400,7 +400,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
                         <button
                           disabled={isPending}
                           onClick={() => submitReset(user.id)}
-                          className="rounded-md bg-black px-3 py-1 text-xs text-white hover:bg-neutral-800 disabled:opacity-50"
+                          className="rounded-md bg-slate-900 px-3 py-1 text-xs text-white hover:bg-slate-800 disabled:opacity-50"
                         >
                           Enregistrer
                         </button>

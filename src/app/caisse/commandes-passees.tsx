@@ -116,7 +116,7 @@ export function CommandesPassees({
                 aria-pressed={filtre === f}
                 className={`rounded-md px-2.5 py-1.5 text-xs transition ${
                   filtre === f
-                    ? "bg-black font-medium text-white"
+                    ? "bg-slate-900 font-medium text-white"
                     : "border border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
               >

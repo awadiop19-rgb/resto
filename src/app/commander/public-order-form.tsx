@@ -124,17 +124,17 @@ export function PublicOrderForm({
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-orange-200 bg-white p-8 text-center shadow-sm">
         <p className="text-4xl">✅</p>
-        <h2 className="mt-3 text-2xl font-bold text-black">Merci {name || "!"} !</h2>
+        <h2 className="mt-3 text-2xl font-bold text-slate-900">Merci {name || "!"} !</h2>
         <p className="mt-2 text-slate-600">
           {mode === "LIVRAISON"
             ? "Votre commande part en préparation. Un livreur vous l'apportera à l'adresse indiquée."
             : "Votre commande part en préparation. Vous pourrez la retirer au restaurant."}{" "}
-          Nous vous appelons au <span className="font-semibold text-black">{phone}</span> si besoin.
+          Nous vous appelons au <span className="font-semibold text-slate-900">{phone}</span> si besoin.
         </p>
 
         <div className="mt-6 rounded-xl bg-slate-50 p-5">
           <p className="text-xs uppercase tracking-wide text-slate-500">Numéro de commande</p>
-          <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-black">{reference}</p>
+          <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-slate-900">{reference}</p>
           <p className="mt-2 text-xs text-slate-500">
             Notez-le : il vous permet de suivre votre commande.
           </p>
@@ -147,7 +147,7 @@ export function PublicOrderForm({
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             href={`/suivi?ref=${reference}`}
-            className="rounded-md bg-orange-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-orange-400"
+            className="rounded-md bg-orange-500 px-5 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-orange-400"
           >
             Suivre ma commande
           </Link>
@@ -161,7 +161,7 @@ export function PublicOrderForm({
               setDeliveryNote("");
               setMode("A_EMPORTER");
             }}
-            className="rounded-md border border-neutral-300 px-5 py-2.5 text-sm font-semibold transition hover:bg-neutral-50"
+            className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:bg-slate-50"
           >
             Nouvelle commande
           </button>
@@ -177,15 +177,15 @@ export function PublicOrderForm({
           .filter((category) => category.items.length > 0)
           .map((category) => (
             <div key={category.id}>
-              <h2 className="mb-3 text-lg font-semibold text-black">{category.name}</h2>
+              <h2 className="mb-3 text-lg font-semibold text-slate-900">{category.name}</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {category.items.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4"
                   >
                     <div>
-                      <p className="font-medium text-black">{item.name}</p>
+                      <p className="font-medium text-slate-900">{item.name}</p>
                       {item.description && (
                         <p className="text-xs text-slate-500">{item.description}</p>
                       )}
@@ -197,7 +197,7 @@ export function PublicOrderForm({
                       <button
                         type="button"
                         onClick={() => removeFromCart(item.id)}
-                        className="h-7 w-7 rounded bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                        className="h-7 w-7 rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
                       >
                         -
                       </button>
@@ -217,8 +217,8 @@ export function PublicOrderForm({
           ))}
       </div>
 
-      <div className="h-fit space-y-4 rounded-xl border border-neutral-200 bg-white p-4 lg:sticky lg:top-24">
-        <h2 className="font-semibold text-black">Votre commande</h2>
+      <div className="h-fit space-y-4 rounded-xl border border-slate-200 bg-white p-4 lg:sticky lg:top-24">
+        <h2 className="font-semibold text-slate-900">Votre commande</h2>
 
         {Object.keys(cart).length === 0 && (
           <p className="text-sm text-slate-400">Votre panier est vide.</p>
@@ -229,7 +229,7 @@ export function PublicOrderForm({
             const item = allItems.find((m) => m.id === id);
             if (!item) return null;
             return (
-              <div key={id} className="space-y-1 border-b border-neutral-100 pb-2 last:border-0">
+              <div key={id} className="space-y-1 border-b border-slate-100 pb-2 last:border-0">
                 <div className="flex items-center justify-between text-sm">
                   <span>
                     {v.quantity} × {item.name}
@@ -241,14 +241,14 @@ export function PublicOrderForm({
                   placeholder="Note (ex: sans piment)"
                   value={v.note}
                   onChange={(e) => updateNote(id, e.target.value)}
-                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
+                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
                 />
               </div>
             );
           })}
         </div>
 
-        <div className="space-y-1 border-t border-neutral-100 pt-3 text-sm">
+        <div className="space-y-1 border-t border-slate-100 pt-3 text-sm">
           <div className="flex items-center justify-between text-slate-600">
             <span>Sous-total</span>
             <span>{formatFCFA(cartTotal)}</span>
@@ -270,7 +270,7 @@ export function PublicOrderForm({
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-neutral-100 pt-3">
+        <div className="space-y-3 border-t border-slate-100 pt-3">
           <div>
             <span className="mb-1.5 block text-sm text-slate-600">Comment souhaitez-vous être servi ?</span>
             <div className="grid grid-cols-2 gap-2">
@@ -288,10 +288,10 @@ export function PublicOrderForm({
                   className={`rounded-lg border px-3 py-2.5 text-left transition ${
                     mode === option.valeur
                       ? "border-orange-500 bg-orange-50 ring-1 ring-orange-200"
-                      : "border-neutral-300 hover:border-orange-300"
+                      : "border-slate-300 hover:border-orange-300"
                   }`}
                 >
-                  <span className="block text-sm font-semibold text-black">{option.label}</span>
+                  <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
                   <span className="block text-xs text-slate-500">{option.detail}</span>
                 </button>
               ))}
@@ -305,7 +305,7 @@ export function PublicOrderForm({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Amadou Diallo"
-              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
             />
           </div>
           <div>
@@ -315,7 +315,7 @@ export function PublicOrderForm({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="77 000 00 00"
-              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
             />
           </div>
 
@@ -337,7 +337,7 @@ export function PublicOrderForm({
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Quartier, rue, n° de villa, point de repère…"
-                  className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -350,7 +350,7 @@ export function PublicOrderForm({
                   value={deliveryNote}
                   onChange={(e) => setDeliveryNote(e.target.value)}
                   placeholder="Ex : 2e étage, appeler en arrivant"
-                  className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-orange-500 focus:outline-none"
                 />
               </div>
             </>
@@ -363,7 +363,7 @@ export function PublicOrderForm({
           type="button"
           disabled={isPending}
           onClick={submit}
-          className="w-full rounded-md bg-orange-500 py-2.5 text-sm font-semibold text-black transition hover:bg-orange-400 disabled:opacity-50"
+          className="w-full rounded-md bg-orange-500 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-orange-400 disabled:opacity-50"
         >
           {isPending ? "Envoi en cours..." : "Envoyer ma commande"}
         </button>

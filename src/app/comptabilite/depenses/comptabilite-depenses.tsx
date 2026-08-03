@@ -88,7 +88,7 @@ export function ComptabiliteDepenses({
           <div className="flex items-end gap-2">
             <button
               onClick={applyFilter}
-              className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800"
+              className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800"
             >
               Filtrer
             </button>

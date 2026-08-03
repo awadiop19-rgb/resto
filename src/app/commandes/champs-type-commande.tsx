@@ -63,7 +63,7 @@ export function ChampsTypeCommande({
               aria-pressed={infos.type === type}
               className={`min-h-10 rounded-lg px-2 text-xs font-medium transition ${
                 infos.type === type
-                  ? "bg-black text-white"
+                  ? "bg-slate-900 text-white"
                   : "border border-slate-200 text-slate-600 hover:bg-slate-50"
               }`}
             >

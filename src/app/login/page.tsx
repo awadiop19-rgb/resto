@@ -68,7 +68,7 @@ function LoginForm() {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       {/* ---------------- Panneau visuel ---------------- */}
-      <div className="relative hidden overflow-hidden bg-black lg:block">
+      <div className="relative hidden overflow-hidden bg-slate-900 lg:block">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/dishes/thieboudienne.webp"
@@ -93,14 +93,14 @@ function LoginForm() {
               </span>{" "}
               Amir
             </p>
-            <p className="mt-3 max-w-md text-lg leading-relaxed text-neutral-300">
+            <p className="mt-3 max-w-md text-lg leading-relaxed text-slate-300">
               L&apos;outil de gestion du restaurant : la salle, la caisse et les comptes au même
               endroit.
             </p>
 
             <ul className="mt-8 space-y-3">
               {ATOUTS.map((atout) => (
-                <li key={atout} className="flex items-start gap-3 text-sm text-neutral-300">
+                <li key={atout} className="flex items-start gap-3 text-sm text-slate-300">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -119,7 +119,7 @@ function LoginForm() {
             </ul>
           </div>
 
-          <p className="text-xs text-neutral-500">Restaurant sénégalais · Dakar</p>
+          <p className="text-xs text-slate-500">Restaurant sénégalais · Dakar</p>
         </div>
       </div>
 
@@ -202,7 +202,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={loading || !email || !password}
-                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-black text-base font-medium text-white transition hover:bg-neutral-800 disabled:opacity-40"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:opacity-40"
               >
                 {loading && (
                   <span

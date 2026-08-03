@@ -130,7 +130,7 @@ export function MesLivraisons({
                     type="button"
                     disabled={traitement}
                     onClick={() => avancer(commande.id, "EN_ROUTE")}
-                    className="min-h-12 flex-1 rounded-lg bg-orange-500 px-4 text-base font-medium text-black transition hover:bg-orange-400 disabled:opacity-40"
+                    className="min-h-12 flex-1 rounded-lg bg-orange-500 px-4 text-base font-medium text-slate-900 transition hover:bg-orange-400 disabled:opacity-40"
                   >
                     Je pars livrer
                   </button>

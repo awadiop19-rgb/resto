@@ -112,7 +112,7 @@ export function ProfileForm({ name, email, role }: { name: string; email: string
           <button
             disabled={isPending}
             onClick={submitProfile}
-            className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
           >
             Enregistrer
           </button>
@@ -158,7 +158,7 @@ export function ProfileForm({ name, email, role }: { name: string; email: string
           <button
             disabled={isPending}
             onClick={submitPassword}
-            className="rounded-md bg-black px-4 py-1.5 text-sm text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
           >
             Modifier le mot de passe
           </button>

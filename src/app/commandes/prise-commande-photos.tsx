@@ -93,7 +93,7 @@ export function PriseCommandePhotos({
               aria-pressed={categorieActive === null}
               className={`min-h-11 rounded-lg px-4 text-sm transition ${
                 categorieActive === null
-                  ? "bg-black font-medium text-white"
+                  ? "bg-slate-900 font-medium text-white"
                   : "border border-slate-200 text-slate-600"
               }`}
             >
@@ -107,7 +107,7 @@ export function PriseCommandePhotos({
                 aria-pressed={categorieActive === c.id}
                 className={`min-h-11 rounded-lg px-4 text-sm transition ${
                   categorieActive === c.id
-                    ? "bg-black font-medium text-white"
+                    ? "bg-slate-900 font-medium text-white"
                     : "border border-slate-200 text-slate-600"
                 }`}
               >
@@ -269,7 +269,7 @@ export function PriseCommandePhotos({
               type="button"
               disabled={isPending || nbArticles === 0}
               onClick={onSubmit}
-              className="min-h-12 w-full rounded-lg bg-black text-base font-medium text-white transition hover:bg-neutral-800 disabled:opacity-40"
+              className="min-h-12 w-full rounded-lg bg-slate-900 text-base font-medium text-white transition hover:bg-slate-800 disabled:opacity-40"
             >
               {isPending ? "Envoi…" : editingOrderId ? "Enregistrer" : "Envoyer en cuisine"}
             </button>

@@ -49,7 +49,7 @@ export function DashboardCharts({
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs uppercase text-slate-400">Bénéfice</p>
-          <p className={`mt-1 text-2xl font-semibold ${profit >= 0 ? "text-black" : "text-red-600"}`}>
+          <p className={`mt-1 text-2xl font-semibold ${profit >= 0 ? "text-slate-900" : "text-red-600"}`}>
             {formatFCFA(profit)}
           </p>
         </div>
