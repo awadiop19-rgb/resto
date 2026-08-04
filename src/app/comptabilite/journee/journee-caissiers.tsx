@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile } from "@/components/stat-tile";
 import { corrigerModePaiement } from "@/lib/actions/caisse";
+import { annulerCommandeEnLigne } from "@/lib/actions/orders";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
@@ -12,6 +13,7 @@ import { TYPE_CLASSES, TYPE_LABELS } from "@/lib/libelles-commande";
 import type {
   CaisseJournee,
   CaissierJournee,
+  CommandeAEncaisser,
   EncaissementLigne,
   JourneeComptable,
 } from "@/lib/journee-comptable";
@@ -96,6 +98,86 @@ function CorrigerMode({ encaissement }: { encaissement: EncaissementLigne }) {
           className="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
         >
           Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Annulation d'une commande en ligne restée impayée.
+ *
+ * Le motif est exigé ici comme il l'est côté serveur : ce qui quitte la journée
+ * doit rester explicable. La confirmation tient dans le fait d'écrire la raison
+ * — demander « êtes-vous sûr ? » par-dessus n'ajouterait qu'un clic machinal.
+ */
+function AnnulerCommande({ commande }: { commande: CommandeAEncaisser }) {
+  const router = useRouter();
+  const [ouvert, setOuvert] = useState(false);
+  const [motif, setMotif] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, demarrer] = useTransition();
+
+  function soumettre() {
+    setErreur(null);
+    demarrer(async () => {
+      try {
+        assurerSucces(await annulerCommandeEnLigne({ orderId: commande.id, motif }));
+        setOuvert(false);
+        setMotif("");
+        router.refresh();
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : "L'annulation a échoué");
+      }
+    });
+  }
+
+  if (!ouvert) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOuvert(true)}
+        className="text-xs text-red-700 hover:underline"
+      >
+        Annuler
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1.5 rounded-md border border-red-200 bg-red-50/60 p-2 text-left">
+      <p className="text-xs text-slate-600">
+        Retirer <span className="font-semibold">{libelleCommande(commande)}</span> de la journée
+      </p>
+      <input
+        type="text"
+        value={motif}
+        onChange={(e) => setMotif(e.target.value)}
+        placeholder="Motif (client injoignable, doublon…)"
+        maxLength={300}
+        autoFocus
+        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+      />
+      {erreur && <p className="text-xs text-red-700">{erreur}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={soumettre}
+          disabled={enCours || motif.trim().length < 5}
+          className="rounded bg-red-700 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {enCours ? "Annulation…" : "Confirmer l'annulation"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOuvert(false);
+            setErreur(null);
+          }}
+          disabled={enCours}
+          className="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
+        >
+          Renoncer
         </button>
       </div>
     </div>
@@ -314,6 +396,8 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
   const {
     caissiers,
     commandesAEncaisser,
+    commandesAnnulees,
+    totalAnnule,
     totalAEncaisser,
     nombreWaveAVerifier,
     montantWaveAVerifier,
@@ -466,6 +550,7 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
                 <th className="pb-2 pr-3 font-medium">Origine</th>
                 <th className="pb-2 pr-3 font-medium">Wave</th>
                 <th className="pb-2 pr-3 text-right font-medium">Montant</th>
+                <th className="pb-2 text-right font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -492,11 +577,16 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
                     )}
                   </td>
                   <td className="py-2 pr-3 text-right font-medium">{formatFCFA(c.montant)}</td>
+                  <td className="py-2 text-right align-top">
+                    {/* Seule une commande en ligne s'annule ici : celle prise au
+                        comptoir a un caissier en face d'elle. */}
+                    {c.source === "EN_LIGNE" && <AnnulerCommande commande={c} />}
+                  </td>
                 </tr>
               ))}
               {commandesAEncaisser.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-400">
+                  <td colSpan={7} className="py-6 text-center text-slate-400">
                     Toutes les commandes de la journée sont encaissées.
                   </td>
                 </tr>
@@ -505,6 +595,49 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
           </table>
         </div>
       </div>
+
+      {/* ------------------------------------------------------- Annulations */}
+      {/* Affichées seulement s'il y en a : une section vide chaque jour finirait
+          par ne plus être lue, et c'est justement celle qu'il faut relire. */}
+      {commandesAnnulees.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold">Commandes annulées aujourd&apos;hui</h2>
+            <span className="text-xs text-slate-500">
+              {commandesAnnulees.length} commande(s) · {formatFCFA(totalAnnule)} retirés de
+              l&apos;attente d&apos;encaissement
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm tabular-nums">
+              <thead>
+                <tr className="text-left text-xs uppercase text-slate-400">
+                  <th className="pb-2 pr-3 font-medium">Annulée à</th>
+                  <th className="pb-2 pr-3 font-medium">Commande</th>
+                  <th className="pb-2 pr-3 font-medium">Motif</th>
+                  <th className="pb-2 pr-3 font-medium">Par</th>
+                  <th className="pb-2 text-right font-medium">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {commandesAnnulees.map((c) => (
+                  <tr key={c.id} className="border-t border-slate-100">
+                    <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
+                      {formatHeure(c.cancelledAt)}
+                    </td>
+                    <td className="py-2 pr-3 font-medium">{libelleCommande(c)}</td>
+                    <td className="py-2 pr-3 text-slate-600">{c.motif ?? "—"}</td>
+                    <td className="py-2 pr-3 text-slate-500">{c.auteur ?? "—"}</td>
+                    <td className="py-2 text-right text-slate-500 line-through">
+                      {formatFCFA(c.montant)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

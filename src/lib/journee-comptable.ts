@@ -89,6 +89,22 @@ export type CaissierJournee = {
   aUneCaisseEnRetard: boolean;
 };
 
+/** Une commande retirée de la journée par la comptabilité, avec sa justification. */
+export type CommandeAnnulee = {
+  id: string;
+  createdAt: Date;
+  cancelledAt: Date;
+  reference: string | null;
+  tableNumber: number | null;
+  customerName: string | null;
+  type: "SUR_PLACE" | "A_EMPORTER" | "LIVRAISON";
+  source: "INTERNE" | "EN_LIGNE";
+  montant: number;
+  motif: string | null;
+  /** `null` si le compte a été supprimé depuis : le motif, lui, demeure. */
+  auteur: string | null;
+};
+
 export type CommandeAEncaisser = {
   id: string;
   createdAt: Date;
@@ -111,7 +127,7 @@ export async function getJourneeComptable() {
   const fin = new Date(debut);
   fin.setDate(fin.getDate() + 1);
 
-  const [caissesBrutes, impayees, nombreImpayeesAnterieures, plusAncienneImpayee] =
+  const [caissesBrutes, impayees, nombreImpayeesAnterieures, plusAncienneImpayee, annulees] =
     await Promise.all([
       // Trois familles de caisses concernent la journée. Un service qui déborde
       // sur le lendemain est fréquent : s'en tenir à la date d'ouverture ferait
@@ -165,6 +181,16 @@ export async function getJourneeComptable() {
         where: { status: { not: "ANNULEE" }, payment: null, createdAt: { lt: debut } },
         select: { createdAt: true },
         orderBy: { createdAt: "asc" },
+      }),
+      // Ce qui a été retiré de la journée, et pourquoi. Une annulation qui
+      // disparaîtrait de l'écran serait une preuve que personne ne lit.
+      prisma.order.findMany({
+        where: { cancelledAt: { gte: debut, lt: fin } },
+        include: {
+          items: { select: { quantity: true, unitPrice: true } },
+          cancelledBy: { select: { name: true } },
+        },
+        orderBy: { cancelledAt: "desc" },
       }),
     ]);
 
@@ -299,6 +325,20 @@ export async function getJourneeComptable() {
     waveReference: commande.waveReference,
   }));
 
+  const commandesAnnulees: CommandeAnnulee[] = annulees.map((commande) => ({
+    id: commande.id,
+    createdAt: commande.createdAt,
+    cancelledAt: commande.cancelledAt!,
+    reference: commande.reference,
+    tableNumber: commande.tableNumber,
+    customerName: commande.customerName,
+    type: commande.type,
+    source: commande.source,
+    montant: totalCommande(commande.items, commande.deliveryFee),
+    motif: commande.cancellationReason,
+    auteur: commande.cancelledBy?.name ?? null,
+  }));
+
   const totalAEncaisser = commandesAEncaisser.reduce((s, c) => s + c.montant, 0);
   const waveAVerifier = commandesAEncaisser.filter((c) => c.waveDeclaredAt != null);
 
@@ -313,6 +353,8 @@ export async function getJourneeComptable() {
     jourLabel: format(debut, "EEEE d MMMM yyyy", { locale: fr }),
     caissiers,
     commandesAEncaisser,
+    commandesAnnulees,
+    totalAnnule: commandesAnnulees.reduce((s, c) => s + c.montant, 0),
     totalAEncaisser,
     nombreWaveAVerifier: waveAVerifier.length,
     montantWaveAVerifier: waveAVerifier.reduce((s, c) => s + c.montant, 0),

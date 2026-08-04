@@ -323,6 +323,68 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   revalidatePath("/caisse");
 }
 
+const annulationSchema = z.object({
+  orderId: z.string().min(1),
+  // Un motif est exige, et pas seulement quelques caracteres : « x » ferait
+  // passer le controle sans rien expliquer a qui relira la journee.
+  motif: z.string().trim().min(5, "Expliquez le motif de l'annulation").max(300),
+});
+
+/**
+ * Annulation par la comptabilite d'une commande en ligne restee impayee.
+ *
+ * Une commande passee sur le site n'engage a rien : un client peut ne jamais
+ * venir, se tromper, ou plaisanter. Elle reste alors en « attente
+ * d'encaissement » et fausse le montant a encaisser de la journee, sans qu'aucun
+ * caissier ne puisse la solder — elle n'a jamais eu de contrepartie.
+ *
+ * La commande n'est pas detruite mais annulee, avec son motif, son auteur et son
+ * heure. Une suppression ferait disparaitre la justification avec ce qu'elle
+ * justifie : plus rien ne permettrait de verifier ce qui a quitte la journee, ni
+ * de constater une annulation faite a tort.
+ */
+export async function annulerCommandeEnLigne(input: z.infer<typeof annulationSchema>) {
+  const session = await requireRole(["ADMIN", "COMPTABILITE"]);
+
+  const parsed = annulationSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const { orderId, motif } = parsed.data;
+
+  const commande = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { payment: { select: { id: true } } },
+  });
+  if (!commande) return refus("Commande introuvable");
+
+  // Une commande prise au comptoir a un caissier en face d'elle, qui peut la
+  // corriger ou l'encaisser. Celle-ci n'a personne : c'est ce qui justifie
+  // qu'on puisse la retirer a distance, et pourquoi la porte s'arrete la.
+  if (commande.source !== "EN_LIGNE") {
+    return refus("Seule une commande passée en ligne peut être annulée ici");
+  }
+  // Encaissee, elle est devenue une recette : l'annuler creuserait un ecart de
+  // caisse que personne ne pourrait expliquer.
+  if (commande.payment) return refus("Impossible d'annuler une commande déjà encaissée");
+  if (commande.status === "ANNULEE") return refus("Cette commande est déjà annulée");
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: "ANNULEE",
+      cancelledAt: new Date(),
+      cancellationReason: motif,
+      cancelledById: session.user.id,
+    },
+  });
+
+  revalidatePath("/comptabilite/journee");
+  revalidatePath("/comptabilite");
+  revalidatePath("/commandes");
+  revalidatePath("/caisse");
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
 export async function deleteOrder(orderId: string) {
   await requireRole(["ADMIN"]);
 

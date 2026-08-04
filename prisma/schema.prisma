@@ -91,6 +91,7 @@ model User {
   correctedCashRegisters CashRegister[] @relation("CashRegisterCorrector")
   openingHours           OpeningHour[]
   closures               ExceptionalClosure[]
+  cancelledOrders        Order[]              @relation("OrderCanceller")
 }
 
 // Zone de livraison : un tarif unique pour tous les quartiers qu'elle regroupe.
@@ -172,6 +173,16 @@ model Order {
   livreur         User?           @relation("OrderLivreur", fields: [livreurId], references: [id])
   assignedAt      DateTime?
   deliveredAt     DateTime?
+
+  // Annulation par la comptabilité d'une commande en ligne jamais encaissée —
+  // client injoignable, canular, doublon. La commande quitte alors la liste des
+  // encaissements en attente, mais n'est pas détruite : le motif doit rester
+  // attaché à ce qu'il justifie, sans quoi plus personne ne peut vérifier après
+  // coup ce qui a disparu de la journée, ni constater une annulation à tort.
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledById      String?
+  cancelledBy        User?     @relation("OrderCanceller", fields: [cancelledById], references: [id])
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
