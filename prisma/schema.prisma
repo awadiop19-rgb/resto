@@ -134,8 +134,21 @@ model MenuItem {
   categoryId  String
   category    MenuCategory @relation(fields: [categoryId], references: [id])
   orderItems  OrderItem[]
+
+  // Produit revendu tel quel : le client consomme ce qui a été acheté, sans
+  // transformation. La vente le sort donc du stock d'elle-même. Reste nul pour un
+  // plat cuisiné, dont les ingrédients sortent vers la cuisine par lots, et non à
+  // la commande — une part de mafé ne se convertit pas en kilos de riz.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  // Ce qu'une vente retire du stock : une bouteille, ou 0,33 L tiré d'un bidon
+  // quand le produit se compte en litres et se vend au verre.
+  quantiteParVente Float @default(1)
+
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  @@index([productId])
 }
 
 model Order {
@@ -154,6 +167,8 @@ model Order {
   user          User?       @relation(fields: [userId], references: [id])
   items         OrderItem[]
   payment       Payment?
+  // Sorties de stock qu'a entraînées la vente d'articles revendus tels quels.
+  stockMovements StockMovement[]
 
   // Livraison à domicile
   deliveryAddress String?
@@ -238,6 +253,8 @@ model Product {
   seuilAlerte Float           @default(0)
   active      Boolean         @default(true)
   movements   StockMovement[]
+  // Articles du menu qui vendent ce produit tel quel.
+  menuItems   MenuItem[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 }
@@ -276,13 +293,24 @@ model StockMovement {
   correctedBy       User?     @relation("StockMovementCorrector", fields: [correctedById], references: [id])
   correctedAt       DateTime?
 
+  // Sortie engendrée par la vente d'un article revendu tel quel — une bouteille,
+  // un jus, une gâterie. Le mouvement est piloté par la commande : il naît avec
+  // elle, la suit quand on la modifie et disparaît quand elle est annulée. Il ne
+  // se saisit ni ne se rectifie à la main, sous peine de faire diverger le stock
+  // de ce qui a réellement été vendu.
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   date      DateTime @default(now())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  // Nul pour une sortie engendrée par une commande en ligne : personne ne l'a
+  // saisie, c'est la vente qui en répond. La commande tient alors lieu d'auteur.
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([productId])
   @@index([date])
+  @@index([orderId])
 }
 
 // Session de caisse ouverte par un caissier pour sa journée de travail.

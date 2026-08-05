@@ -230,6 +230,15 @@ export async function corrigerMouvement(input: CorrectionInput) {
   });
   if (!mouvement) return refus("Mouvement introuvable");
 
+  // Une sortie de vente n'est pas une saisie : elle reflète des articles
+  // commandés. La rectifier ici ferait diverger le stock de ce qui a été vendu —
+  // c'est la commande qu'il faut corriger.
+  if (mouvement.orderId) {
+    return refus(
+      "Cette sortie provient d'une commande : corrigez la commande, le stock suivra."
+    );
+  }
+
   if (mouvement.type === "ACHAT" && (data.unitPrice == null || data.unitPrice <= 0)) {
     return refus("Le prix unitaire d'achat est requis");
   }
@@ -298,6 +307,12 @@ export async function supprimerMouvement(id: string) {
     include: { product: true },
   });
   if (!mouvement) return refus("Mouvement introuvable");
+
+  if (mouvement.orderId) {
+    return refus(
+      "Cette sortie provient d'une commande : annulez la commande, le stock suivra."
+    );
+  }
 
   // Retirer une entrée déjà consommée rendrait le solde négatif : l'historique
   // décrirait alors un stock qui n'a jamais pu exister.

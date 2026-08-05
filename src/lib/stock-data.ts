@@ -58,6 +58,7 @@ export async function getStock(periode: Periode) {
         product: { select: { id: true, name: true, unit: true, category: true } },
         user: { select: { name: true } },
         correctedBy: { select: { name: true } },
+        order: { select: { reference: true, tableNumber: true, source: true } },
       },
       orderBy: { date: "desc" },
     }),
@@ -127,8 +128,18 @@ export async function getStock(periode: Periode) {
     montant: m.type === "ACHAT" ? m.quantity * (m.unitPrice ?? 0) : null,
     supplier: m.supplier,
     note: m.note,
-    userName: m.user.name,
+    userName: m.user?.name ?? null,
     lieeAUneDepense: m.expenseId != null,
+    // Renseignée si la sortie a été engendrée par la vente d'un article revendu
+    // tel quel. Elle n'est alors ni saisie ni rectifiable à la main : la commande
+    // en répond, et c'est elle qu'il faut nommer.
+    vente: m.order
+      ? {
+          reference: m.order.reference,
+          tableNumber: m.order.tableNumber,
+          enLigne: m.order.source === "EN_LIGNE",
+        }
+      : null,
     // Renseignée si la comptabilité a rectifié la saisie. La quantité d'origine
     // est le delta signé : c'est sa valeur absolue qui s'affiche.
     correction: m.correctedAt

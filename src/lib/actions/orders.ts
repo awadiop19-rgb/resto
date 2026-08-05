@@ -10,6 +10,11 @@ import { blocageCommandeEnLigne } from "@/lib/horaires-data";
 import { premierMessage, refus } from "@/lib/actions/resultat";
 import { genererReference } from "@/lib/reference-commande";
 import { tarifDuQuartier } from "@/lib/zones-livraison";
+import {
+  annulerSortiesDeVente,
+  ecrireSortiesDeVente,
+  sortiesDeVente,
+} from "@/lib/stock-vente";
 
 /**
  * Résout le tarif d'une livraison. Le montant est lu en base puis figé sur la
@@ -117,29 +122,39 @@ export async function createOrder(input: z.infer<typeof createOrderSchema>) {
   const livraison = await resoudreLivraison(data.type, data.quartierId);
   if ("erreur" in livraison) return livraison;
 
+  // Ce que la commande retire du stock, vérifié avant d'être écrit : on ne prend
+  // pas une commande de boissons qu'on n'a pas.
+  const sorties = await sortiesDeVente(data.items);
+  if ("erreur" in sorties) return sorties;
+
   const commande = await avecReferenceUnique((reference) =>
-    prisma.order.create({
-      data: {
-        reference,
-        // Un numéro de table n'a de sens que pour une consommation sur place.
-        tableNumber: data.type === "SUR_PLACE" ? data.tableNumber : null,
-        type: data.type,
-        customerName: data.customerName || null,
-        customerPhone: data.customerPhone || null,
-        deliveryAddress: data.type === "LIVRAISON" ? data.deliveryAddress : null,
-        deliveryNote: data.type === "LIVRAISON" ? data.deliveryNote || null : null,
-        deliveryStatus: data.type === "LIVRAISON" ? "A_ASSIGNER" : null,
-        quartierId: livraison.quartierId,
-        deliveryFee: livraison.deliveryFee,
-        userId: session.user.id,
-        items: { create: lignes },
-      },
+    prisma.$transaction(async (tx) => {
+      const creee = await tx.order.create({
+        data: {
+          reference,
+          // Un numéro de table n'a de sens que pour une consommation sur place.
+          tableNumber: data.type === "SUR_PLACE" ? data.tableNumber : null,
+          type: data.type,
+          customerName: data.customerName || null,
+          customerPhone: data.customerPhone || null,
+          deliveryAddress: data.type === "LIVRAISON" ? data.deliveryAddress : null,
+          deliveryNote: data.type === "LIVRAISON" ? data.deliveryNote || null : null,
+          deliveryStatus: data.type === "LIVRAISON" ? "A_ASSIGNER" : null,
+          quartierId: livraison.quartierId,
+          deliveryFee: livraison.deliveryFee,
+          userId: session.user.id,
+          items: { create: lignes },
+        },
+      });
+      await ecrireSortiesDeVente(tx, creee.id, sorties, session.user.id, creee.createdAt);
+      return creee;
     }),
   );
 
   revalidatePath("/commandes");
   revalidatePath("/livraisons");
   revalidatePath("/dashboard");
+  revalidatePath("/stock");
   return commande.reference;
 }
 
@@ -188,38 +203,50 @@ export async function createPublicOrder(input: z.infer<typeof publicOrderSchema>
   const livraison = await resoudreLivraison(data.type, data.quartierId);
   if ("erreur" in livraison) return livraison;
 
+  // Une boisson épuisée ne se sert pas davantage parce que la commande vient du
+  // site : le client doit l'apprendre maintenant, pas au retrait.
+  const sorties = await sortiesDeVente(data.items);
+  if ("erreur" in sorties) return sorties;
+
   const order = await avecReferenceUnique((reference) =>
-    prisma.order.create({
-      data: {
-        reference,
-        source: "EN_LIGNE",
-        type: data.type,
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        deliveryAddress: data.type === "LIVRAISON" ? data.deliveryAddress : null,
-        deliveryNote: data.type === "LIVRAISON" ? data.deliveryNote || null : null,
-        deliveryStatus: data.type === "LIVRAISON" ? "A_ASSIGNER" : null,
-        quartierId: livraison.quartierId,
-        deliveryFee: livraison.deliveryFee,
-        userId: null,
-        items: {
-          create: data.items.map((item) => {
-            const menuItem = menuItems.find((m) => m.id === item.menuItemId)!;
-            return {
-              menuItemId: item.menuItemId,
-              quantity: item.quantity,
-              unitPrice: menuItem.price,
-              note: item.note,
-            };
-          }),
+    prisma.$transaction(async (tx) => {
+      const creee = await tx.order.create({
+        data: {
+          reference,
+          source: "EN_LIGNE",
+          type: data.type,
+          customerName: data.customerName,
+          customerPhone: data.customerPhone,
+          deliveryAddress: data.type === "LIVRAISON" ? data.deliveryAddress : null,
+          deliveryNote: data.type === "LIVRAISON" ? data.deliveryNote || null : null,
+          deliveryStatus: data.type === "LIVRAISON" ? "A_ASSIGNER" : null,
+          quartierId: livraison.quartierId,
+          deliveryFee: livraison.deliveryFee,
+          userId: null,
+          items: {
+            create: data.items.map((item) => {
+              const menuItem = menuItems.find((m) => m.id === item.menuItemId)!;
+              return {
+                menuItemId: item.menuItemId,
+                quantity: item.quantity,
+                unitPrice: menuItem.price,
+                note: item.note,
+              };
+            }),
+          },
         },
-      },
+      });
+      // Aucun auteur : personne n'a saisi cette sortie, c'est la commande qui en
+      // répond.
+      await ecrireSortiesDeVente(tx, creee.id, sorties, null, creee.createdAt);
+      return creee;
     }),
   );
 
   revalidatePath("/commandes");
   revalidatePath("/livraisons");
   revalidatePath("/dashboard");
+  revalidatePath("/stock");
   return order.reference;
 }
 
@@ -270,9 +297,16 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
   const livraison = await resoudreLivraison(data.type, data.quartierId);
   if ("erreur" in livraison) return livraison;
 
-  await prisma.$transaction([
-    prisma.orderItem.deleteMany({ where: { orderId: data.orderId } }),
-    prisma.order.update({
+  // Les sorties de la commande vont être refaites : ce qu'elle avait déjà retiré
+  // du stock lui reste acquis le temps du calcul, sinon ajouter une bière à une
+  // commande qui en comptait déjà deux se heurterait à un stock compté en double.
+  const sorties = await sortiesDeVente(data.items, { commandeId: data.orderId });
+  if ("erreur" in sorties) return sorties;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.orderItem.deleteMany({ where: { orderId: data.orderId } });
+    await annulerSortiesDeVente(tx, data.orderId);
+    await tx.order.update({
       where: { id: data.orderId },
       data: {
         tableNumber: data.type === "SUR_PLACE" ? data.tableNumber : null,
@@ -300,11 +334,13 @@ export async function updateOrder(input: z.infer<typeof updateOrderSchema>) {
           }),
         },
       },
-    }),
-  ]);
+    });
+    await ecrireSortiesDeVente(tx, data.orderId, sorties, session.user.id, existing.createdAt);
+  });
 
   revalidatePath("/commandes");
   revalidatePath("/dashboard");
+  revalidatePath("/stock");
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
@@ -318,9 +354,37 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     if (payment) return refus("Impossible d'annuler une commande déjà encaissée");
   }
 
-  await prisma.order.update({ where: { id: orderId }, data: { status } });
+  const commande = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      status: true,
+      createdAt: true,
+      userId: true,
+      items: { select: { menuItemId: true, quantity: true } },
+    },
+  });
+  if (!commande) return refus("Commande introuvable");
+
+  // Le stock suit l'annulation dans les deux sens : ce qui n'est plus vendu
+  // revient, ce qui l'est de nouveau repart. Une commande rétablie sans que le
+  // stock ne bouge ferait apparaître des boissons qui sont chez le client.
+  const annule = status === "ANNULEE";
+  const retabli = commande.status === "ANNULEE" && !annule;
+
+  const sorties = retabli ? await sortiesDeVente(commande.items) : [];
+  if ("erreur" in sorties) return sorties;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({ where: { id: orderId }, data: { status } });
+    if (annule) await annulerSortiesDeVente(tx, orderId);
+    if (retabli) {
+      await ecrireSortiesDeVente(tx, orderId, sorties, commande.userId, commande.createdAt);
+    }
+  });
+
   revalidatePath("/commandes");
   revalidatePath("/caisse");
+  if (annule || retabli) revalidatePath("/stock");
 }
 
 const annulationSchema = z.object({
@@ -367,14 +431,19 @@ export async function annulerCommandeEnLigne(input: z.infer<typeof annulationSch
   if (commande.payment) return refus("Impossible d'annuler une commande déjà encaissée");
   if (commande.status === "ANNULEE") return refus("Cette commande est déjà annulée");
 
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      status: "ANNULEE",
-      cancelledAt: new Date(),
-      cancellationReason: motif,
-      cancelledById: session.user.id,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: "ANNULEE",
+        cancelledAt: new Date(),
+        cancellationReason: motif,
+        cancelledById: session.user.id,
+      },
+    });
+    // Ce que la commande avait sorti du stock n'a jamais quitté le comptoir :
+    // sans cela, une commande fantôme laisserait un manquant permanent.
+    await annulerSortiesDeVente(tx, orderId);
   });
 
   revalidatePath("/comptabilite/journee");
@@ -382,6 +451,7 @@ export async function annulerCommandeEnLigne(input: z.infer<typeof annulationSch
   revalidatePath("/commandes");
   revalidatePath("/caisse");
   revalidatePath("/dashboard");
+  revalidatePath("/stock");
   return { ok: true as const };
 }
 
@@ -391,7 +461,10 @@ export async function deleteOrder(orderId: string) {
   const payment = await prisma.payment.findUnique({ where: { orderId } });
   if (payment) return refus("Impossible de supprimer une commande déjà encaissée");
 
+  // Les sorties de stock de la commande partent avec elle (cascade) : ce qui
+  // n'a jamais été vendu ne doit pas rester décompté.
   await prisma.order.delete({ where: { id: orderId } });
   revalidatePath("/commandes");
   revalidatePath("/dashboard");
+  revalidatePath("/stock");
 }

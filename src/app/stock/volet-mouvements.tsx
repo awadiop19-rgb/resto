@@ -29,6 +29,13 @@ const TEINTE_TYPE: Record<string, string> = {
 
 type MouvementLigne = StockData["mouvements"][number];
 
+/** Comment désigner la vente d'où sort le mouvement : ce que la caisse reconnaît. */
+function libelleVente(vente: NonNullable<MouvementLigne["vente"]>) {
+  if (vente.reference) return vente.reference;
+  if (vente.tableNumber != null) return `table ${vente.tableNumber}`;
+  return vente.enLigne ? "commande en ligne" : "commande";
+}
+
 /**
  * Correction d'une saisie de stock.
  *
@@ -201,7 +208,7 @@ export function VoletMouvements({ data }: { data: StockData }) {
         m.montant != null ? Math.round(m.montant) : "",
         m.supplier ?? "",
         m.note ?? "",
-        m.userName,
+        m.userName ?? (m.vente ? `Vente ${libelleVente(m.vente)}` : ""),
         m.correction?.quantiteOrigine ?? "",
         m.correction?.prixOrigine ?? "",
         m.correction?.motif ?? "",
@@ -384,6 +391,11 @@ export function VoletMouvements({ data }: { data: StockData }) {
                         en dépense
                       </span>
                     )}
+                    {m.vente && (
+                      <span className="ml-2 rounded bg-orange-50 px-1.5 py-0.5 text-xs text-[#b47400]">
+                        vendu · {libelleVente(m.vente)}
+                      </span>
+                    )}
                     {/* Le motif accompagne les valeurs barrées : voir qu'une
                         saisie a changé sans savoir pourquoi laisse le doute
                         que la correction devait lever. */}
@@ -396,18 +408,27 @@ export function VoletMouvements({ data }: { data: StockData }) {
                       </p>
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-slate-500">{m.userName}</td>
+                  <td className="py-2 pr-3 text-slate-500">
+                    {m.userName ?? <span className="text-slate-400">Commande en ligne</span>}
+                  </td>
                   <td className="py-2 pr-3 align-top">
-                    <div className="flex flex-wrap items-start justify-end gap-x-3 gap-y-1">
-                      <CorrigerMouvement mouvement={m} />
-                      <button
-                        disabled={isPending}
-                        onClick={() => supprimer(m.id)}
-                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
+                    {/* Une sortie engendrée par une vente n'appartient pas à la
+                        comptabilité : elle décrit ce que le client a emporté.
+                        C'est la commande qui se corrige ou s'annule. */}
+                    {m.vente ? (
+                      <p className="text-right text-xs text-slate-400">Suit la commande</p>
+                    ) : (
+                      <div className="flex flex-wrap items-start justify-end gap-x-3 gap-y-1">
+                        <CorrigerMouvement mouvement={m} />
+                        <button
+                          disabled={isPending}
+                          onClick={() => supprimer(m.id)}
+                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

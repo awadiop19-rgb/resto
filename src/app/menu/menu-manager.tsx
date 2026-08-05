@@ -4,12 +4,16 @@ import { useState, useTransition } from "react";
 import {
   createCategory,
   createMenuItem,
+  creerProduitPourArticle,
   deleteCategory,
   deleteMenuItem,
+  lierAuStock,
   toggleAvailability,
   updateMenuItem,
 } from "@/lib/actions/menu";
 import { assurerSucces } from "@/lib/actions/resultat";
+import { formatQuantite, uniteCourte } from "@/lib/stock";
+import type { ProduitOption } from "@/lib/stock";
 
 type MenuItem = {
   id: string;
@@ -18,10 +22,164 @@ type MenuItem = {
   price: number;
   available: boolean;
   categoryId: string;
+  productId: string | null;
+  quantiteParVente: number;
 };
 type Category = { id: string; name: string; items: MenuItem[] };
+type Produit = ProduitOption;
 
-export function MenuManager({ categories, isAdmin }: { categories: Category[]; isAdmin: boolean }) {
+/**
+ * Suivi en stock d'un article revendu tel quel.
+ *
+ * Une boisson, un jus, une gâterie sortent du stock à la vente : encore faut-il
+ * dire de quel produit ils tirent. Le lien se pose ici, article par article —
+ * jamais deviné d'un nom, qui peut changer sans qu'on y pense.
+ *
+ * Les plats restent à l'écart : leurs ingrédients partent en cuisine par lots, et
+ * ce qu'un thiébou consomme ne se déduit pas de son prix.
+ */
+function LiaisonStock({ item, produits }: { item: MenuItem; produits: Produit[] }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [produitId, setProduitId] = useState(item.productId ?? "");
+  const [quantite, setQuantite] = useState(String(item.quantiteParVente));
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, demarrer] = useTransition();
+
+  const lie = produits.find((p) => p.id === item.productId);
+
+  function lancer(action: () => Promise<unknown>) {
+    setErreur(null);
+    demarrer(async () => {
+      try {
+        assurerSucces(await action());
+        setOuvert(false);
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : "Le suivi du stock a échoué");
+      }
+    });
+  }
+
+  function enregistrer() {
+    const q = Number(quantite);
+    if (!Number.isFinite(q) || q <= 0) {
+      setErreur("La quantité par vente doit être positive.");
+      return;
+    }
+    lancer(() =>
+      lierAuStock({ menuItemId: item.id, productId: produitId || null, quantiteParVente: q })
+    );
+  }
+
+  if (ouvert) {
+    const choisi = produits.find((p) => p.id === produitId);
+    return (
+      <div className="w-64 space-y-1.5 rounded-md border border-orange-200 bg-orange-50/60 p-2">
+        <select
+          value={produitId}
+          onChange={(e) => setProduitId(e.target.value)}
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+        >
+          <option value="">Non suivi en stock</option>
+          {produits.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({formatQuantite(p.stock, p.unit)})
+            </option>
+          ))}
+        </select>
+        {choisi && (
+          <label className="block text-xs text-slate-500">
+            Retiré du stock par vente
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={quantite}
+              onChange={(e) => setQuantite(e.target.value)}
+              className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900"
+            />
+            <span className="text-slate-400">
+              en {uniteCourte(choisi.unit)} — 1 pour une pièce entière
+            </span>
+          </label>
+        )}
+        {erreur && <p className="text-xs text-red-700">{erreur}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={enregistrer}
+            disabled={enCours}
+            className="rounded bg-orange-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {enCours ? "Enregistrement…" : "Enregistrer"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOuvert(false);
+              setErreur(null);
+            }}
+            disabled={enCours}
+            className="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
+          >
+            Renoncer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {lie ? (
+        <>
+          <p className="text-xs">
+            {lie.name}{" "}
+            <span className={lie.stock > 0 ? "text-slate-400" : "text-red-600"}>
+              ({formatQuantite(lie.stock, lie.unit)})
+            </span>
+          </p>
+          {item.quantiteParVente !== 1 && (
+            <p className="text-xs text-slate-400">
+              {formatQuantite(item.quantiteParVente, lie.unit)} par vente
+            </p>
+          )}
+          <button onClick={() => setOuvert(true)} className="text-xs text-orange-600 hover:underline">
+            Modifier
+          </button>
+        </>
+      ) : (
+        <div className="flex flex-col items-start">
+          <button
+            onClick={() => lancer(() => creerProduitPourArticle(item.id))}
+            disabled={enCours}
+            className="text-xs text-orange-600 hover:underline disabled:opacity-50"
+          >
+            Suivre en stock
+          </button>
+          {produits.length > 0 && (
+            <button
+              onClick={() => setOuvert(true)}
+              className="text-xs text-slate-500 hover:underline"
+            >
+              Relier à un produit existant
+            </button>
+          )}
+        </div>
+      )}
+      {erreur && <p className="text-xs text-red-700">{erreur}</p>}
+    </div>
+  );
+}
+
+export function MenuManager({
+  categories,
+  produits,
+  isAdmin,
+}: {
+  categories: Category[];
+  produits: Produit[];
+  isAdmin: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState("");
@@ -156,6 +314,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
                 <th className="pb-2">Nom</th>
                 <th className="pb-2">Prix</th>
                 <th className="pb-2">Disponible</th>
+                {isAdmin && <th className="pb-2">Suivi en stock</th>}
                 {isAdmin && <th className="pb-2">Actions</th>}
               </tr>
             </thead>
@@ -179,6 +338,7 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
                           className="w-24 rounded border border-slate-300 px-2 py-1"
                         />
                       </td>
+                      <td className="py-2 pr-2">—</td>
                       <td className="py-2 pr-2">—</td>
                       <td className="py-2 pr-2 space-x-2">
                         <button onClick={() => saveEdit(item)} className="text-emerald-600 hover:underline">
@@ -223,7 +383,12 @@ export function MenuManager({ categories, isAdmin }: { categories: Category[]; i
                         )}
                       </td>
                       {isAdmin && (
-                        <td className="space-x-2 py-2 pr-2">
+                        <td className="py-2 pr-2 align-top">
+                          <LiaisonStock item={item} produits={produits} />
+                        </td>
+                      )}
+                      {isAdmin && (
+                        <td className="space-x-2 py-2 pr-2 align-top">
                           <button onClick={() => startEdit(item)} className="text-orange-600 hover:underline">
                             Modifier
                           </button>
