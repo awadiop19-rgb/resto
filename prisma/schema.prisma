@@ -92,6 +92,7 @@ model User {
   openingHours           OpeningHour[]
   closures               ExceptionalClosure[]
   cancelledOrders        Order[]              @relation("OrderCanceller")
+  correctedStockMovements StockMovement[]     @relation("StockMovementCorrector")
 }
 
 // Zone de livraison : un tarif unique pour tous les quartiers qu'elle regroupe.
@@ -261,6 +262,19 @@ model StockMovement {
   // proviennent d'une seule saisie.
   expenseId String?  @unique
   expense   Expense? @relation(fields: [expenseId], references: [id])
+
+  // Correction d'une saisie par la comptabilité : quantité mal frappée, prix
+  // d'achat erroné. Les valeurs d'origine sont conservées — sans elles, plus
+  // rien ne distingue une saisie juste d'une saisie rectifiée, et l'écart de
+  // stock ou de dépense qu'elle a provoqué devient inexplicable. Comme pour la
+  // correction d'un mode de paiement, seule la toute première correction les
+  // renseigne, pour qu'un aller-retour ne les efface pas.
+  originalQuantity  Float?
+  originalUnitPrice Float?
+  correctionNote    String?
+  correctedById     String?
+  correctedBy       User?     @relation("StockMovementCorrector", fields: [correctedById], references: [id])
+  correctedAt       DateTime?
 
   date      DateTime @default(now())
   userId    String

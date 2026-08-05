@@ -57,6 +57,7 @@ export async function getStock(periode: Periode) {
       include: {
         product: { select: { id: true, name: true, unit: true, category: true } },
         user: { select: { name: true } },
+        correctedBy: { select: { name: true } },
       },
       orderBy: { date: "desc" },
     }),
@@ -128,6 +129,17 @@ export async function getStock(periode: Periode) {
     note: m.note,
     userName: m.user.name,
     lieeAUneDepense: m.expenseId != null,
+    // Renseignée si la comptabilité a rectifié la saisie. La quantité d'origine
+    // est le delta signé : c'est sa valeur absolue qui s'affiche.
+    correction: m.correctedAt
+      ? {
+          quantiteOrigine: m.originalQuantity,
+          prixOrigine: m.originalUnitPrice,
+          motif: m.correctionNote,
+          auteur: m.correctedBy?.name ?? null,
+          date: m.correctedAt,
+        }
+      : null,
   }));
 
   const achatsPeriode = mouvements

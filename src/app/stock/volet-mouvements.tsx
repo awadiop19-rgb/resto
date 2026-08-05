@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bar,
   BarChart,
@@ -16,7 +17,7 @@ import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import { downloadCsv } from "@/lib/csv";
 import { formatDate, formatFCFA } from "@/lib/format";
 import { assurerSucces } from "@/lib/actions/resultat";
-import { supprimerMouvement } from "@/lib/actions/stock";
+import { corrigerMouvement, supprimerMouvement } from "@/lib/actions/stock";
 import { formatQuantite, formatQuantiteSignee, libelleType } from "@/lib/stock";
 import type { StockData } from "@/lib/stock-data";
 
@@ -25,6 +26,133 @@ const TEINTE_TYPE: Record<string, string> = {
   SORTIE: "text-[#b47400]",
   AJUSTEMENT: "text-slate-500",
 };
+
+type MouvementLigne = StockData["mouvements"][number];
+
+/**
+ * Correction d'une saisie de stock.
+ *
+ * Le motif est exigé ici comme il l'est côté serveur : une quantité qui change
+ * après coup doit rester explicable, d'autant qu'un achat entraîne sa dépense
+ * avec lui. Le sens du mouvement n'est pas modifiable — une entrée reste une
+ * entrée, et c'est le serveur qui en décide.
+ */
+function CorrigerMouvement({ mouvement }: { mouvement: MouvementLigne }) {
+  const router = useRouter();
+  const [ouvert, setOuvert] = useState(false);
+  const [quantite, setQuantite] = useState(String(Math.abs(mouvement.quantity)));
+  const [prix, setPrix] = useState(mouvement.unitPrice != null ? String(mouvement.unitPrice) : "");
+  const [motif, setMotif] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, demarrer] = useTransition();
+
+  const estAchat = mouvement.type === "ACHAT";
+
+  function soumettre() {
+    setErreur(null);
+    const q = Number(quantite);
+    if (!Number.isFinite(q) || q <= 0) return setErreur("La quantité doit être positive.");
+    const p = prix === "" ? undefined : Number(prix);
+    if (estAchat && (p == null || !Number.isFinite(p) || p <= 0)) {
+      return setErreur("Le prix unitaire d'achat est requis.");
+    }
+
+    demarrer(async () => {
+      try {
+        assurerSucces(
+          await corrigerMouvement({ id: mouvement.id, quantity: q, unitPrice: p, motif })
+        );
+        setOuvert(false);
+        setMotif("");
+        router.refresh();
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : "La correction a échoué");
+      }
+    });
+  }
+
+  if (!ouvert) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOuvert(true)}
+        className="text-xs text-orange-600 hover:underline"
+      >
+        Corriger
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 w-72 space-y-1.5 rounded-md border border-orange-200 bg-orange-50/60 p-2 text-left">
+      <p className="text-xs text-slate-600">
+        Rectifier la saisie de <span className="font-semibold">{mouvement.productName}</span>
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        <label className="text-xs">
+          <span className="block text-slate-500">Quantité ({mouvement.unit})</span>
+          <input
+            type="number"
+            step="any"
+            min="0"
+            value={quantite}
+            onChange={(e) => setQuantite(e.target.value)}
+            autoFocus
+            className="mt-0.5 w-28 rounded border border-slate-300 px-2 py-1 text-xs"
+          />
+        </label>
+        {estAchat && (
+          <label className="text-xs">
+            <span className="block text-slate-500">Prix unitaire (F)</span>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={prix}
+              onChange={(e) => setPrix(e.target.value)}
+              className="mt-0.5 w-28 rounded border border-slate-300 px-2 py-1 text-xs"
+            />
+          </label>
+        )}
+      </div>
+      {estAchat && (
+        <p className="text-xs text-slate-500">
+          La dépense liée sera ajustée au même montant.
+        </p>
+      )}
+      <input
+        type="text"
+        value={motif}
+        onChange={(e) => setMotif(e.target.value)}
+        placeholder="Motif de la correction"
+        maxLength={300}
+        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+      />
+      {erreur && <p className="text-xs text-red-700">{erreur}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={soumettre}
+          disabled={enCours || motif.trim().length < 5}
+          className="rounded bg-orange-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {enCours ? "Enregistrement…" : "Enregistrer"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOuvert(false);
+            setErreur(null);
+          }}
+          disabled={enCours}
+          className="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
+        >
+          Renoncer
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function VoletMouvements({ data }: { data: StockData }) {
   const { mouvements, fluxParJour, consommationParProduit } = data;
@@ -47,7 +175,22 @@ export function VoletMouvements({ data }: { data: StockData }) {
 
   function exportCsv() {
     const rows: (string | number)[][] = [
-      ["Date", "Type", "Produit", "Quantité", "Unité", "Prix unitaire (F)", "Montant (F)", "Fournisseur", "Note", "Saisi par"],
+      [
+        "Date",
+        "Type",
+        "Produit",
+        "Quantité",
+        "Unité",
+        "Prix unitaire (F)",
+        "Montant (F)",
+        "Fournisseur",
+        "Note",
+        "Saisi par",
+        "Quantité saisie à l'origine",
+        "Prix unitaire d'origine (F)",
+        "Motif de la correction",
+        "Corrigé par",
+      ],
       ...visibles.map((m) => [
         formatDate(m.date),
         libelleType(m.type),
@@ -59,6 +202,10 @@ export function VoletMouvements({ data }: { data: StockData }) {
         m.supplier ?? "",
         m.note ?? "",
         m.userName,
+        m.correction?.quantiteOrigine ?? "",
+        m.correction?.prixOrigine ?? "",
+        m.correction?.motif ?? "",
+        m.correction?.auteur ?? "",
       ]),
     ];
     downloadCsv(`mouvements_stock_${new Date().toISOString().slice(0, 10)}.csv`, rows);
@@ -209,9 +356,23 @@ export function VoletMouvements({ data }: { data: StockData }) {
                   <td className="py-2 pr-3">{m.productName}</td>
                   <td className="py-2 pr-3 font-semibold">
                     {formatQuantiteSignee(m.quantity, m.unit)}
+                    {/* La valeur d'origine est montrée barrée à côté de la
+                        nouvelle : une correction qu'il faut aller chercher
+                        ailleurs n'est pas lue. */}
+                    {m.correction?.quantiteOrigine != null && (
+                      <span className="ml-1.5 font-normal text-slate-400 line-through">
+                        {formatQuantite(Math.abs(m.correction.quantiteOrigine), m.unit)}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">
                     {m.unitPrice != null ? formatFCFA(m.unitPrice) : "—"}
+                    {m.correction?.prixOrigine != null &&
+                      m.correction.prixOrigine !== m.unitPrice && (
+                        <span className="ml-1.5 text-slate-400 line-through">
+                          {formatFCFA(m.correction.prixOrigine)}
+                        </span>
+                      )}
                   </td>
                   <td className="py-2 pr-3">
                     {m.montant != null ? formatFCFA(Math.round(m.montant)) : "—"}
@@ -223,16 +384,30 @@ export function VoletMouvements({ data }: { data: StockData }) {
                         en dépense
                       </span>
                     )}
+                    {/* Le motif accompagne les valeurs barrées : voir qu'une
+                        saisie a changé sans savoir pourquoi laisse le doute
+                        que la correction devait lever. */}
+                    {m.correction && (
+                      <p className="mt-0.5 text-xs text-[#b47400]">
+                        corrigé
+                        {m.correction.motif && ` · ${m.correction.motif}`}
+                        {m.correction.auteur && ` · ${m.correction.auteur}`} ·{" "}
+                        {formatDate(m.correction.date)}
+                      </p>
+                    )}
                   </td>
                   <td className="py-2 pr-3 text-slate-500">{m.userName}</td>
-                  <td className="py-2 pr-3 text-right">
-                    <button
-                      disabled={isPending}
-                      onClick={() => supprimer(m.id)}
-                      className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      Supprimer
-                    </button>
+                  <td className="py-2 pr-3 align-top">
+                    <div className="flex flex-wrap items-start justify-end gap-x-3 gap-y-1">
+                      <CorrigerMouvement mouvement={m} />
+                      <button
+                        disabled={isPending}
+                        onClick={() => supprimer(m.id)}
+                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

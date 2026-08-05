@@ -193,6 +193,103 @@ export async function enregistrerMouvement(input: MouvementInput) {
   revalider();
 }
 
+const correctionSchema = z.object({
+  id: z.string().min(1),
+  /** Saisie en positif : le sens du mouvement d'origine est conservé. */
+  quantity: z.number().positive("La quantité doit être positive"),
+  unitPrice: z.number().min(0).optional(),
+  // Cinq caractères au moins : un « x » passerait le contrôle sans rien
+  // expliquer à qui relira le registre.
+  motif: z.string().trim().min(5, "Expliquez le motif de la correction").max(300),
+});
+
+export type CorrectionInput = z.infer<typeof correctionSchema>;
+
+/**
+ * Correction d'une saisie de stock par la comptabilité.
+ *
+ * Une quantité mal frappée fausse le solde jusqu'au prochain inventaire, et pour
+ * un achat, elle fausse aussi le résultat comptable. La corriger par un
+ * ajustement inverse laisserait deux lignes contradictoires dans un registre qui
+ * doit se lire comme un historique ; la saisie est donc rectifiée sur place, et
+ * ses valeurs d'origine conservées.
+ *
+ * Le sens du mouvement ne change pas : une entrée reste une entrée. Requalifier
+ * un achat en sortie ferait apparaître ou disparaître une dépense, ce qui n'est
+ * plus une correction de frappe mais une autre écriture — à saisir comme telle.
+ */
+export async function corrigerMouvement(input: CorrectionInput) {
+  const session = await requireComptable();
+  const parsed = correctionSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const data = parsed.data;
+
+  const mouvement = await prisma.stockMovement.findUnique({
+    where: { id: data.id },
+    include: { product: true },
+  });
+  if (!mouvement) return refus("Mouvement introuvable");
+
+  if (mouvement.type === "ACHAT" && (data.unitPrice == null || data.unitPrice <= 0)) {
+    return refus("Le prix unitaire d'achat est requis");
+  }
+
+  // Le signe vient du mouvement d'origine, jamais de la saisie : c'est ce qui
+  // garantit qu'une correction ne retourne pas une entrée en sortie.
+  const nouveauDelta = mouvement.quantity < 0 ? -data.quantity : data.quantity;
+  const nouveauPrix = mouvement.type === "ACHAT" ? (data.unitPrice ?? null) : mouvement.unitPrice;
+
+  if (nouveauDelta === mouvement.quantity && nouveauPrix === mouvement.unitPrice) {
+    return refus("Cette correction ne change rien à la saisie");
+  }
+
+  // Réduire une entrée déjà consommée rendrait le solde négatif : l'historique
+  // décrirait un stock qui n'a jamais pu exister.
+  const solde = await prisma.stockMovement.aggregate({
+    where: { productId: mouvement.productId },
+    _sum: { quantity: true },
+  });
+  const apres = (solde._sum.quantity ?? 0) - mouvement.quantity + nouveauDelta;
+  if (apres < 0) {
+    return refus(
+      `Correction impossible : le stock de ${mouvement.product.name} deviendrait négatif ` +
+        `(${formatQuantite(apres, mouvement.product.unit)}). Passez par un ajustement d'inventaire.`
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.stockMovement.update({
+      where: { id: mouvement.id },
+      data: {
+        quantity: nouveauDelta,
+        unitPrice: nouveauPrix,
+        // Ne se renseignent qu'une fois : deux corrections successives ne
+        // doivent pas effacer la trace de la saisie initiale.
+        originalQuantity: mouvement.originalQuantity ?? mouvement.quantity,
+        originalUnitPrice: mouvement.originalUnitPrice ?? mouvement.unitPrice,
+        correctionNote: data.motif,
+        correctedById: session.user.id,
+        correctedAt: new Date(),
+      },
+    });
+
+    // La dépense engendrée par l'achat suit la correction. Sans cela, le stock
+    // et le résultat comptable, nés d'une même saisie, se mettraient à diverger.
+    if (mouvement.expenseId && mouvement.type === "ACHAT") {
+      await tx.expense.update({
+        where: { id: mouvement.expenseId },
+        data: {
+          amount: data.quantity * (data.unitPrice ?? 0),
+          label: `Achat ${mouvement.product.name} — ${formatQuantite(data.quantity, mouvement.product.unit)}`,
+        },
+      });
+    }
+  });
+
+  revalider();
+  return { ok: true as const };
+}
+
 export async function supprimerMouvement(id: string) {
   await requireComptable();
 
