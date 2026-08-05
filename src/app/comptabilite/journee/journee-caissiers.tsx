@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile } from "@/components/stat-tile";
 import { corrigerModePaiement } from "@/lib/actions/caisse";
-import { annulerCommandeEnLigne } from "@/lib/actions/orders";
+import { annulerCommandeImpayee } from "@/lib/actions/orders";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
@@ -105,7 +105,8 @@ function CorrigerMode({ encaissement }: { encaissement: EncaissementLigne }) {
 }
 
 /**
- * Annulation d'une commande en ligne restée impayée.
+ * Annulation d'une commande restée impayée, qu'elle vienne du site ou du
+ * comptoir.
  *
  * Le motif est exigé ici comme il l'est côté serveur : ce qui quitte la journée
  * doit rester explicable. La confirmation tient dans le fait d'écrire la raison
@@ -122,7 +123,7 @@ function AnnulerCommande({ commande }: { commande: CommandeAEncaisser }) {
     setErreur(null);
     demarrer(async () => {
       try {
-        assurerSucces(await annulerCommandeEnLigne({ orderId: commande.id, motif }));
+        assurerSucces(await annulerCommandeImpayee({ orderId: commande.id, motif }));
         setOuvert(false);
         setMotif("");
         router.refresh();
@@ -153,7 +154,7 @@ function AnnulerCommande({ commande }: { commande: CommandeAEncaisser }) {
         type="text"
         value={motif}
         onChange={(e) => setMotif(e.target.value)}
-        placeholder="Motif (client injoignable, doublon…)"
+        placeholder="Motif (client parti sans payer, injoignable, doublon…)"
         maxLength={300}
         autoFocus
         className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
@@ -578,9 +579,11 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
                   </td>
                   <td className="py-2 pr-3 text-right font-medium">{formatFCFA(c.montant)}</td>
                   <td className="py-2 text-right align-top">
-                    {/* Seule une commande en ligne s'annule ici : celle prise au
-                        comptoir a un caissier en face d'elle. */}
-                    {c.source === "EN_LIGNE" && <AnnulerCommande commande={c} />}
+                    {/* Comptoir ou site, une commande jamais réglée doit pouvoir
+                        quitter la journée : sans cela, elle gonfle le reste à
+                        encaisser indéfiniment. Le motif écrit est ce qui rend le
+                        retrait vérifiable. */}
+                    <AnnulerCommande commande={c} />
                   </td>
                 </tr>
               ))}

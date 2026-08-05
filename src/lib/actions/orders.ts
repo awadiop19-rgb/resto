@@ -395,19 +395,22 @@ const annulationSchema = z.object({
 });
 
 /**
- * Annulation par la comptabilite d'une commande en ligne restee impayee.
+ * Annulation par la comptabilite d'une commande restee impayee.
  *
- * Une commande passee sur le site n'engage a rien : un client peut ne jamais
- * venir, se tromper, ou plaisanter. Elle reste alors en « attente
- * d'encaissement » et fausse le montant a encaisser de la journee, sans qu'aucun
- * caissier ne puisse la solder — elle n'a jamais eu de contrepartie.
+ * Une commande qui n'est jamais reglee reste en « attente d'encaissement » et
+ * fausse le montant a encaisser de la journee, sans qu'aucun caissier ne puisse
+ * la solder — elle n'a jamais eu de contrepartie. Cela vaut pour une commande du
+ * site, ou le client peut ne jamais venir, se tromper, ou plaisanter, comme pour
+ * une commande du comptoir dont le client est parti sans payer.
  *
  * La commande n'est pas detruite mais annulee, avec son motif, son auteur et son
  * heure. Une suppression ferait disparaitre la justification avec ce qu'elle
  * justifie : plus rien ne permettrait de verifier ce qui a quitte la journee, ni
- * de constater une annulation faite a tort.
+ * de constater une annulation faite a tort. C'est aussi pourquoi le motif est
+ * exige, et pas seulement quelques caracteres — la trace ecrite est ce qui
+ * distingue une correction d'une disparition.
  */
-export async function annulerCommandeEnLigne(input: z.infer<typeof annulationSchema>) {
+export async function annulerCommandeImpayee(input: z.infer<typeof annulationSchema>) {
   const session = await requireRole(["ADMIN", "COMPTABILITE"]);
 
   const parsed = annulationSchema.safeParse(input);
@@ -420,12 +423,6 @@ export async function annulerCommandeEnLigne(input: z.infer<typeof annulationSch
   });
   if (!commande) return refus("Commande introuvable");
 
-  // Une commande prise au comptoir a un caissier en face d'elle, qui peut la
-  // corriger ou l'encaisser. Celle-ci n'a personne : c'est ce qui justifie
-  // qu'on puisse la retirer a distance, et pourquoi la porte s'arrete la.
-  if (commande.source !== "EN_LIGNE") {
-    return refus("Seule une commande passée en ligne peut être annulée ici");
-  }
   // Encaissee, elle est devenue une recette : l'annuler creuserait un ecart de
   // caisse que personne ne pourrait expliquer.
   if (commande.payment) return refus("Impossible d'annuler une commande déjà encaissée");
