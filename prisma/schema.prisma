@@ -67,7 +67,8 @@ enum StockUnit {
 }
 
 enum StockMovementType {
-  ACHAT // entrée : la comptabilité approvisionne le stock
+  ACHAT // entrée : la comptabilité approvisionne le stock chez un fournisseur
+  PRODUCTION // entrée : la maison a préparé le produit elle-même
   SORTIE // sortie : la comptabilité remet des produits à la cuisine
   AJUSTEMENT // correction d'inventaire, dans un sens ou dans l'autre
 }
@@ -249,6 +250,12 @@ model Product {
   name        String          @unique
   unit        StockUnit
   category    String          @default("Ingrédients")
+  // Préparé par la maison — jus pressés, thiakry, lakh — et non acheté tout fait.
+  // Un tel produit n'a pas de prix d'achat fournisseur : ses ingrédients ont
+  // déjà été achetés et passés en dépense. L'approvisionner passe donc par une
+  // production, jamais par un achat, sous peine de compter deux fois la même
+  // charge — une fois le riz, une fois le thiakry qu'on en a tiré.
+  faitMaison  Boolean         @default(false)
   // En dessous de ce niveau, le produit remonte en alerte sur le tableau de bord.
   seuilAlerte Float           @default(0)
   active      Boolean         @default(true)

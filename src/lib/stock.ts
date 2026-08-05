@@ -28,15 +28,28 @@ export const CATEGORIES_PRODUIT = [
 
 export const TYPES_MOUVEMENT: { value: StockMovementType; label: string }[] = [
   { value: "ACHAT", label: "Achat" },
+  { value: "PRODUCTION", label: "Production maison" },
   { value: "SORTIE", label: "Sortie cuisine" },
   { value: "AJUSTEMENT", label: "Ajustement d'inventaire" },
 ];
 
 const LIBELLE_TYPE: Record<StockMovementType, string> = {
   ACHAT: "Achat",
+  PRODUCTION: "Production",
   SORTIE: "Sortie cuisine",
   AJUSTEMENT: "Ajustement",
 };
+
+/**
+ * Un produit fait maison s'approvisionne par une production, un produit acheté
+ * par un achat — jamais l'inverse. La règle vaut des deux côtés : le formulaire
+ * n'offre que le type possible, et le serveur refuse l'autre.
+ */
+export function typesPossibles(faitMaison: boolean) {
+  return TYPES_MOUVEMENT.filter((t) =>
+    t.value === "ACHAT" ? !faitMaison : t.value === "PRODUCTION" ? faitMaison : true
+  );
+}
 
 export function libelleType(type: StockMovementType) {
   return LIBELLE_TYPE[type];
@@ -68,6 +81,7 @@ export type LigneStock = {
   name: string;
   unit: StockUnit;
   category: string;
+  faitMaison: boolean;
   seuilAlerte: number;
   active: boolean;
   /** Solde courant, toutes dates confondues : un stock ne se filtre pas par période. */
@@ -87,5 +101,6 @@ export type ProduitOption = {
   name: string;
   unit: StockUnit;
   category: string;
+  faitMaison: boolean;
   stock: number;
 };

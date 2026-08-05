@@ -16,6 +16,7 @@ type Produit = {
   name: string;
   unit: StockUnit;
   category: string;
+  faitMaison: boolean;
   seuilAlerte: number;
   active: boolean;
   mouvements: number;
@@ -25,6 +26,7 @@ type Formulaire = {
   name: string;
   unit: StockUnit;
   category: string;
+  faitMaison: boolean;
   seuilAlerte: string;
   active: boolean;
 };
@@ -33,6 +35,7 @@ const VIDE: Formulaire = {
   name: "",
   unit: "KG",
   category: CATEGORIES_PRODUIT[0],
+  faitMaison: false,
   seuilAlerte: "",
   active: true,
 };
@@ -71,6 +74,7 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
           name: form.name,
           unit: form.unit,
           category: form.category,
+          faitMaison: form.faitMaison,
           seuilAlerte: Number(form.seuilAlerte) || 0,
           active: form.active,
         }),
@@ -85,6 +89,7 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
       name: p.name,
       unit: p.unit,
       category: p.category,
+      faitMaison: p.faitMaison,
       seuilAlerte: String(p.seuilAlerte),
       active: p.active,
     });
@@ -97,6 +102,7 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
           name: edit.name,
           unit: edit.unit,
           category: edit.category,
+          faitMaison: edit.faitMaison,
           seuilAlerte: Number(edit.seuilAlerte) || 0,
           active: edit.active,
         }),
@@ -157,6 +163,17 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
             className={CHAMP}
             aria-label="Seuil d'alerte"
           />
+          {/* Un produit fait maison n'a pas de fournisseur : il s'approvisionne
+              par une production, et sa valeur en stock reste nulle puisque ses
+              ingrédients sont déjà passés en dépense. */}
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={form.faitMaison}
+              onChange={(e) => setForm((f) => ({ ...f, faitMaison: e.target.checked }))}
+            />
+            Fait maison
+          </label>
           <button
             disabled={isPending}
             onClick={ajouter}
@@ -235,6 +252,16 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
                           </option>
                         ))}
                       </select>
+                      <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={edit.faitMaison}
+                          onChange={(e) =>
+                            setEdit((f) => ({ ...f, faitMaison: e.target.checked }))
+                          }
+                        />
+                        Fait maison
+                      </label>
                     </td>
                     <td className="py-2 pr-3">
                       <input
@@ -276,7 +303,14 @@ export function ProduitsManager({ produits }: { produits: Produit[] }) {
                   </tr>
                 ) : (
                   <tr key={p.id} className="border-t border-slate-100">
-                    <td className="py-2 pr-3 font-medium">{p.name}</td>
+                    <td className="py-2 pr-3 font-medium">
+                      {p.name}
+                      {p.faitMaison && (
+                        <span className="ml-2 rounded bg-orange-50 px-1.5 py-0.5 text-xs font-normal text-[#b47400]">
+                          fait maison
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 pr-3 text-slate-500">
                       {UNITES.find((u) => u.value === p.unit)?.label}
                     </td>

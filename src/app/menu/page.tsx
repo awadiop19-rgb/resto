@@ -16,7 +16,7 @@ export default async function MenuPage() {
     prisma.product.findMany({
       where: { active: true },
       orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, unit: true, category: true },
+      select: { id: true, name: true, unit: true, category: true, faitMaison: true },
     }),
     // Le solde rend le lien tangible : « Coca — 12 u » dit du premier coup d'œil
     // qu'on a désigné le bon produit.

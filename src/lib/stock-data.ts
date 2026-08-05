@@ -95,11 +95,16 @@ export async function getStock(periode: Periode) {
       name: p.name,
       unit: p.unit,
       category: p.category,
+      faitMaison: p.faitMaison,
       seuilAlerte: p.seuilAlerte,
       active: p.active,
       stock,
       statut: stock <= 0 ? "rupture" : stock <= p.seuilAlerte ? "sous_seuil" : "ok",
       coutMoyen,
+      // Un produit fait maison n'a pas de prix d'achat, donc pas de coût moyen :
+      // sa valeur en stock reste nulle. C'est voulu — ses ingrédients figurent
+      // déjà dans les dépenses, et les compter une seconde fois sous la forme du
+      // jus qu'ils sont devenus gonflerait l'actif d'une charge déjà passée.
       valeur: stock > 0 ? stock * coutMoyen : 0,
       entreesPeriode: flux?.entrees ?? 0,
       sortiesPeriode: flux?.sorties ?? 0,
@@ -217,7 +222,14 @@ export async function getStock(periode: Periode) {
 
   const options: ProduitOption[] = lignes
     .filter((l) => l.active)
-    .map((l) => ({ id: l.id, name: l.name, unit: l.unit, category: l.category, stock: l.stock }))
+    .map((l) => ({
+      id: l.id,
+      name: l.name,
+      unit: l.unit,
+      category: l.category,
+      faitMaison: l.faitMaison,
+      stock: l.stock,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
   return {

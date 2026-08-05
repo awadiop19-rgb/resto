@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { enregistrerMouvement } from "@/lib/actions/stock";
 import { formatFCFA } from "@/lib/format";
-import { TYPES_MOUVEMENT, formatQuantite, uniteCourte } from "@/lib/stock";
+import { formatQuantite, typesPossibles, uniteCourte } from "@/lib/stock";
 import type { ProduitOption } from "@/lib/stock";
 import type { StockMovementType } from "@/generated/prisma/client";
 
@@ -14,6 +14,8 @@ const CHAMP = "rounded-md border border-slate-300 px-3 py-1.5 text-sm";
 const AIDE: Record<StockMovementType, string> = {
   ACHAT:
     "L'achat entre en stock et crée automatiquement la dépense correspondante : ne la ressaisissez pas dans Dépenses.",
+  PRODUCTION:
+    "Ce que la maison a préparé entre en stock. Aucune dépense n'est créée : les ingrédients ont déjà été achetés, et les compter une seconde fois doublerait la charge.",
   SORTIE: "Les produits remis à la cuisine quittent le stock, valorisés au coût moyen d'achat.",
   AJUSTEMENT:
     "Correction d'inventaire : aligne le stock sur ce qui est réellement en réserve, sans impact sur les dépenses.",
@@ -37,6 +39,13 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
     [produits, productId]
   );
 
+  // Le produit commande les types offerts : on n'achète pas ce qu'on prépare, et
+  // on ne produit pas une canette. Si le type retenu ne convient plus au produit
+  // qu'on vient de choisir, il bascule sur le premier possible plutôt que de
+  // laisser un bouton actif que le serveur refuserait.
+  const types = typesPossibles(produit?.faitMaison ?? false);
+  const typeRetenu = types.some((t) => t.value === type) ? type : types[0].value;
+
   const montant = Number(quantity) > 0 && Number(unitPrice) > 0
     ? Number(quantity) * Number(unitPrice)
     : 0;
@@ -53,7 +62,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
       setError("La quantité doit être positive");
       return;
     }
-    if (type === "ACHAT" && !(Number(unitPrice) > 0)) {
+    if (typeRetenu === "ACHAT" && !(Number(unitPrice) > 0)) {
       setError("Le prix unitaire d'achat est requis");
       return;
     }
@@ -63,17 +72,17 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
         assurerSucces(
           await enregistrerMouvement({
             productId,
-            type,
+            type: typeRetenu,
             quantity: Number(quantity),
-            sensNegatif: type === "AJUSTEMENT" ? sensNegatif : undefined,
-            unitPrice: type === "ACHAT" ? Number(unitPrice) : undefined,
+            sensNegatif: typeRetenu === "AJUSTEMENT" ? sensNegatif : undefined,
+            unitPrice: typeRetenu === "ACHAT" ? Number(unitPrice) : undefined,
             supplier: supplier || undefined,
             note: note || undefined,
             date,
           })
         );
         setSucces(
-          `${produit?.name} : mouvement enregistré${type === "ACHAT" ? " et passé en dépense" : ""}.`
+          `${produit?.name} : mouvement enregistré${typeRetenu === "ACHAT" ? " et passé en dépense" : ""}.`
         );
         setQuantity("");
         setUnitPrice("");
@@ -104,7 +113,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
       <h2 className="mb-3 font-semibold">Enregistrer un mouvement</h2>
 
       <div className="mb-3 flex flex-wrap gap-1.5">
-        {TYPES_MOUVEMENT.map((t) => (
+        {types.map((t) => (
           <button
             key={t.value}
             type="button"
@@ -113,9 +122,9 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
               setError(null);
               setSucces(null);
             }}
-            aria-pressed={type === t.value}
+            aria-pressed={typeRetenu === t.value}
             className={`rounded-md px-3 py-1.5 text-sm transition ${
-              type === t.value
+              typeRetenu === t.value
                 ? "bg-slate-900 font-medium text-white"
                 : "border border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
@@ -125,7 +134,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
         ))}
       </div>
 
-      <p className="mb-3 text-xs text-slate-400">{AIDE[type]}</p>
+      <p className="mb-3 text-xs text-slate-400">{AIDE[typeRetenu]}</p>
 
       {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {succes && (
@@ -179,7 +188,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
           />
         </div>
 
-        {type === "ACHAT" && (
+        {typeRetenu === "ACHAT" && (
           <>
             <div>
               <label className="mb-1 block text-xs text-slate-500" htmlFor="mvt-prix">
@@ -215,7 +224,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
           </>
         )}
 
-        {type === "AJUSTEMENT" && (
+        {typeRetenu === "AJUSTEMENT" && (
           <div className="flex items-end">
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
@@ -228,7 +237,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
           </div>
         )}
 
-        <div className={type === "ACHAT" ? "lg:col-span-3" : "lg:col-span-2"}>
+        <div className={typeRetenu === "ACHAT" ? "lg:col-span-3" : "lg:col-span-2"}>
           <label className="mb-1 block text-xs text-slate-500" htmlFor="mvt-note">
             Note (facultatif)
           </label>

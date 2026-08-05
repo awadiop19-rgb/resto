@@ -30,6 +30,7 @@ export default async function ProduitsPage() {
             name: p.name,
             unit: p.unit,
             category: p.category,
+            faitMaison: p.faitMaison,
             seuilAlerte: p.seuilAlerte,
             active: p.active,
             mouvements: p._count.movements,

@@ -29,6 +29,8 @@ const productSchema = z.object({
   name: z.string().trim().min(1, "Nom requis"),
   unit: z.enum(["KG", "LITRE", "UNITE"]),
   category: z.string().trim().min(1, "Catégorie requise"),
+  /** Préparé par la maison : il s'approvisionne par production, pas par achat. */
+  faitMaison: z.boolean(),
   seuilAlerte: z.number().min(0, "Le seuil ne peut pas être négatif"),
   active: z.boolean(),
 });
@@ -99,7 +101,7 @@ export async function deleteProduct(id: string) {
 
 const mouvementSchema = z.object({
   productId: z.string().min(1, "Produit requis"),
-  type: z.enum(["ACHAT", "SORTIE", "AJUSTEMENT"]),
+  type: z.enum(["ACHAT", "PRODUCTION", "SORTIE", "AJUSTEMENT"]),
   /** Toujours saisie en positif : c'est le type qui décide du sens. */
   quantity: z.number().positive("La quantité doit être positive"),
   /** L'ajustement seul peut retirer du stock avec une quantité saisie en positif. */
@@ -129,12 +131,27 @@ export async function enregistrerMouvement(input: MouvementInput) {
     return refus(`Le produit « ${produit.name} » est désactivé`);
   }
 
+  // Un produit fait maison n'a pas de fournisseur : ses ingrédients ont déjà été
+  // achetés et passés en dépense. L'entrer comme un achat compterait la charge
+  // deux fois — une fois le bissap, une fois le jus qu'on en a tiré. Et à
+  // l'inverse, une canette ne se produit pas : elle s'achète.
+  if (data.type === "ACHAT" && produit.faitMaison) {
+    return refus(
+      `« ${produit.name} » est fait maison : enregistrez une production, pas un achat.`
+    );
+  }
+  if (data.type === "PRODUCTION" && !produit.faitMaison) {
+    return refus(
+      `« ${produit.name} » n'est pas fait maison : enregistrez un achat, pas une production.`
+    );
+  }
+
   if (data.type === "ACHAT" && (data.unitPrice == null || data.unitPrice <= 0)) {
     return refus("Le prix unitaire d'achat est requis");
   }
 
   const delta =
-    data.type === "ACHAT"
+    data.type === "ACHAT" || data.type === "PRODUCTION"
       ? data.quantity
       : data.type === "SORTIE"
         ? -data.quantity
