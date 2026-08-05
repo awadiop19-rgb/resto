@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { closeCashRegister } from "@/lib/actions/caisse";
 import { assurerSucces } from "@/lib/actions/resultat";
+import { excedentRessembleAuWave, refusCloture } from "@/lib/cloture-caisse";
 import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 
 /**
@@ -13,12 +14,15 @@ import { formatFCFA, formatSignedFCFA } from "@/lib/format";
 export function FermetureCaisseForm({
   openingFloat,
   totalCash,
+  totalWave,
   sorties = 0,
   onClosed,
   intitule = "Fermer la caisse et faire le versement",
 }: {
   openingFloat: number;
   totalCash: number;
+  /** Encaissements Wave du service : hors tiroir, ils ne se comptent pas. */
+  totalWave: number;
   /** Espèces sorties du tiroir pour des dépenses courantes pendant le service. */
   sorties?: number;
   onClosed?: () => void;
@@ -36,16 +40,20 @@ export function FermetureCaisseForm({
   const hasDeclared = declaredAmount !== "" && !Number.isNaN(declaredNumber);
   const difference = hasDeclared ? declaredNumber - expectedCash : 0;
 
+  const cloture = { declaredAmount: declaredNumber, openingFloat, totalCash, totalWave, sorties };
+  // Opposé dès la frappe plutôt qu'au clic : le caissier corrige son comptage
+  // pendant qu'il a encore les billets en main.
+  const blocage = hasDeclared ? refusCloture(cloture, closeNote) : null;
+  const soupcon = hasDeclared && !blocage && excedentRessembleAuWave(cloture);
+
   function handleClose() {
     setError(null);
     if (!hasDeclared) {
       setError("Indiquez le montant des espèces comptées dans le tiroir");
       return;
     }
-    if (difference !== 0 && !closeNote.trim()) {
-      setError(
-        `Écart de ${formatSignedFCFA(difference)} par rapport aux ${formatFCFA(expectedCash)} attendus : indiquez le motif dans la note.`,
-      );
+    if (blocage) {
+      setError(blocage);
       return;
     }
     const recap =
@@ -122,10 +130,22 @@ export function FermetureCaisseForm({
             <>
               Écart de <strong>{formatSignedFCFA(difference)}</strong>{" "}
               {difference < 0 ? "(manquant)" : "(excédent)"} sur les {formatFCFA(expectedCash)} attendus.
-              Expliquez-le dans la note.
             </>
           )}
         </div>
+      )}
+
+      {blocage && (
+        <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {blocage}
+        </p>
+      )}
+
+      {soupcon && (
+        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Cet excédent avoisine les {formatFCFA(totalWave)} encaissés sur Wave. Vérifiez que vous
+          n&apos;avez compté que les espèces du tiroir.
+        </p>
       )}
     </div>
   );

@@ -79,6 +79,7 @@ export function CaissesEnRetard({ caisses }: { caisses: CaisseEnRetard[] }) {
               <FermetureCaisseForm
                 openingFloat={caisse.openingFloat}
                 totalCash={caisse.totalCash}
+                totalWave={caisse.totalWave}
                 sorties={caisse.sorties}
                 intitule="Clôturer cette journée et verser les espèces"
               />

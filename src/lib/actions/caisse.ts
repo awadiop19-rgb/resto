@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { blocageCaisse } from "@/lib/journee-caisse";
 import { premierMessage, refus } from "@/lib/actions/resultat";
+import { refusCloture } from "@/lib/cloture-caisse";
 import { especesDisponibles, estCategorieDeCaisse } from "@/lib/depenses-caisse";
 import { totalCommande } from "@/lib/total-commande";
 
@@ -122,9 +123,19 @@ export async function closeCashRegister(input: z.infer<typeof closeCashRegisterS
   const difference = data.declaredAmount - expectedCash;
 
   const note = data.note?.trim() ? data.note.trim() : null;
-  if (difference !== 0 && !note) {
-    return refus("Un écart de caisse a été constaté : indiquez son motif dans la note");
-  }
+  // Le formulaire pose déjà ces contrôles, mais un versement est définitif :
+  // c'est ici qu'ils tiennent.
+  const motifRefus = refusCloture(
+    {
+      declaredAmount: data.declaredAmount,
+      openingFloat: cashRegister.openingFloat,
+      totalCash,
+      totalWave,
+      sorties,
+    },
+    note,
+  );
+  if (motifRefus) return refus(motifRefus);
 
   await prisma.cashRegister.update({
     where: { id: cashRegister.id },

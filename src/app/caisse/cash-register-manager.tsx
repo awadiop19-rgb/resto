@@ -312,6 +312,7 @@ export function CashRegisterManager({
             <FermetureCaisseForm
               openingFloat={cashRegister.openingFloat}
               totalCash={totalCash}
+              totalWave={totalWave}
               sorties={sorties}
             />
           </div>
