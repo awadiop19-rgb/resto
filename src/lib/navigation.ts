@@ -27,6 +27,7 @@ export type NomIcone =
   | "comptabilite"
   | "journee"
   | "mois"
+  | "coffre"
   | "utilisateurs"
   | "horaires"
   | "profil";
@@ -73,6 +74,7 @@ export const NAVIGATION: Record<string, Navigation> = {
           { href: "/comptabilite", label: "Comptabilité", icone: "comptabilite" },
           { href: "/comptabilite/journee", label: "Journée en cours", icone: "journee" },
           { href: "/comptabilite/mois", label: "Le mois", icone: "mois" },
+          { href: "/comptabilite/caisse", label: "Caisse au coffre", icone: "coffre" },
         ],
       },
       {
@@ -100,6 +102,7 @@ export const NAVIGATION: Record<string, Navigation> = {
           { href: "/comptabilite", label: "Tableau de bord", icone: "comptabilite" },
           { href: "/comptabilite/journee", label: "Journée en cours", icone: "journee" },
           { href: "/comptabilite/mois", label: "Le mois", icone: "mois" },
+          { href: "/comptabilite/caisse", label: "Caisse au coffre", icone: "coffre" },
         ],
       },
       {

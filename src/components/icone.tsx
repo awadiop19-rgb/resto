@@ -88,6 +88,15 @@ const TRACES: Record<NomIcone, React.ReactNode> = {
       <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
     </>
   ),
+  // Un coffre-fort, avec sa porte et sa molette : `caisse` est deja un tiroir,
+  // et les deux ne designent pas le meme argent.
+  coffre: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M8 4v16" />
+      <circle cx="14.5" cy="12" r="2.5" />
+    </>
+  ),
   utilisateurs: (
     <>
       <circle cx="9" cy="8.5" r="3.5" />

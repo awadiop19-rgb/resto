@@ -195,6 +195,12 @@ export function VoletVersements({ data }: { data: ComptabiliteData }) {
             Le fond de caisse ressort le matin et rentre le soir : il est déduit pour ne pas être compté
             comme une recette.
           </p>
+          <Link
+            href="/comptabilite/caisse"
+            className="mt-3 inline-block text-xs text-orange-600 hover:underline"
+          >
+            Ce qu&apos;il reste au coffre →
+          </Link>
         </div>
       </div>
 

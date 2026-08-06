@@ -94,6 +94,7 @@ model User {
   closures               ExceptionalClosure[]
   cancelledOrders        Order[]              @relation("OrderCanceller")
   correctedStockMovements StockMovement[]     @relation("StockMovementCorrector")
+  cashCounts             CashCount[]
 }
 
 // Zone de livraison : un tarif unique pour tous les quartiers qu'elle regroupe.
@@ -349,6 +350,39 @@ model CashRegister {
   // Dépenses courantes réglées en espèces depuis ce tiroir pendant le service.
   expenses  Expense[]
   createdAt DateTime  @default(now())
+}
+
+// Comptage de la caisse tenue par la comptabilité : les espèces réellement
+// présentes dans le coffre à un instant donné.
+//
+// Cette caisse-là ne se ferme jamais, contrairement au tiroir d'un caissier qui
+// ne vit qu'une journée : elle reçoit les versements du soir et paie les achats
+// du lendemain, d'un mois sur l'autre. Son disponible n'est donc pas stocké —
+// comme le stock, il est la somme de ce qui entre et de ce qui sort depuis le
+// dernier comptage. Un solde entretenu à la main finirait par diverger des
+// versements et des dépenses qui le composent.
+//
+// Un comptage sert alors à deux choses : amorcer la caisse, quand l'argent déjà
+// dans le coffre ne provient d'aucun versement enregistré — un démarrage, un
+// report de l'exercice précédent — et la recaler après un comptage physique.
+// Seul le plus récent fait foi ; les précédents restent, car un recalage sans
+// trace ne se vérifie plus.
+model CashCount {
+  id String @id @default(cuid())
+
+  // Instant du comptage : tout ce qui entre ou sort du coffre à partir de là
+  // s'ajoute au montant compté. Saisi au jour, il vaut minuit — l'état du coffre
+  // au matin — car c'est la résolution des dépenses, elles aussi datées au jour.
+  countedAt DateTime
+  amount    Float
+  note      String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([countedAt])
 }
 
 model Payment {
