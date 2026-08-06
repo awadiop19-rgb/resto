@@ -15,8 +15,10 @@ import {
 import { ChartCard } from "@/components/chart-card";
 import { StatTile } from "@/components/stat-tile";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
+import Link from "next/link";
 import { downloadCsv } from "@/lib/csv";
-import { formatFCFA } from "@/lib/format";
+import { formatDate, formatFCFA } from "@/lib/format";
+import type { ReportDuMois } from "@/lib/caisse-comptable";
 // `import type` obligatoire ici : le module de calcul importe Prisma, qui n'a
 // rien à faire dans un bundle navigateur. Seuls les types en sont tirés.
 import type { MoisComptable } from "@/lib/mois-comptable";
@@ -105,6 +107,81 @@ function JaugeTaux({
   );
 }
 
+/**
+ * Ce que le mois doit aux espèces trouvées au coffre en commençant.
+ *
+ * Sa place est sous le verdict, et non dans les tuiles : il ne corrige aucun
+ * chiffre du mois, il dit avec quel argent les premiers achats ont été réglés.
+ * Mis en tuile à côté des recettes, il se lirait comme une recette de plus.
+ */
+function BlocReport({ report, resultat }: { report: ReportDuMois; resultat: number }) {
+  const { entame } = report;
+  // Un report peut être regarni plutôt qu'entamé : un mois qui encaisse plus
+  // qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a trouvé.
+  const consomme = entame > 0;
+  const part = report.report > 0 ? Math.min(100, (Math.abs(entame) / report.report) * 100) : 0;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-semibold">Report du mois précédent</h3>
+        <span className="text-xs text-slate-400">
+          Coffre compté le {formatDate(report.comptage.countedAt)}
+        </span>
+      </div>
+      <p className="mt-0.5 text-xs text-slate-400">
+        Espèces déjà au coffre quand le mois a commencé : elles ne viennent pas des recettes de ce
+        mois-ci, et ce sont elles qui ont réglé les premiers achats.
+      </p>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div>
+          <dt className="text-xs text-slate-400">Au coffre en début de mois</dt>
+          <dd className="text-lg font-semibold tabular-nums">{formatFCFA(report.report)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-400">{consomme ? "Entamé depuis" : "Regarni depuis"}</dt>
+          <dd className="text-lg font-semibold tabular-nums">{formatFCFA(Math.abs(entame))}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-400">Au coffre aujourd&apos;hui</dt>
+          <dd className="text-lg font-semibold tabular-nums">{formatFCFA(report.soldeActuel)}</dd>
+        </div>
+      </dl>
+
+      {consomme && report.report > 0 && (
+        <div className="mt-4">
+          <div className="flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-slate-100">
+            <div style={{ width: `${part}%`, backgroundColor: CHART.magnitudeAlt }} />
+            <div style={{ width: `${100 - part}%`, backgroundColor: CHART.magnitude }} />
+          </div>
+          <p className="mt-1.5 text-xs text-slate-400">
+            {part.toFixed(0)} % du report consommé
+          </p>
+        </div>
+      )}
+
+      {report.creux && (
+        <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          Le mois s&apos;est appuyé jusqu&apos;à{" "}
+          <span className="font-semibold text-slate-900">{formatFCFA(report.creux.montant)}</span> sur
+          ce report, au {formatDate(report.creux.date)} : sans les espèces héritées du mois précédent,
+          le coffre y aurait été à découvert d&apos;autant.
+        </p>
+      )}
+
+      <p className="mt-2 text-xs text-slate-400">
+        Le résultat du mois ({formatFCFA(resultat)}) n&apos;en est pas changé : une dépense reste une
+        charge du mois où elle est engagée, quelle que soit l&apos;origine des espèces qui l&apos;ont
+        payée.{" "}
+        <Link href="/comptabilite/caisse" className="text-orange-600 hover:underline">
+          Voir le livre de caisse
+        </Link>
+      </p>
+    </div>
+  );
+}
+
 export function MoisDashboard({ data }: { data: MoisComptable }) {
   const verdict = verdictDuMois(data);
   const n = NIVEAUX[verdict.niveau];
@@ -171,6 +248,8 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
         <p className={`mt-2 text-sm ${n.encre}`}>{verdict.message}</p>
         <p className={`mt-2 text-sm font-medium ${n.encre}`}>{verdict.conseil}</p>
       </div>
+
+      {data.report && <BlocReport report={data.report} resultat={data.resultat} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4">

@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -54,6 +55,155 @@ export type ComptageCaisse = {
 
 export type CaisseComptable = Awaited<ReturnType<typeof getCaisseComptable>>;
 
+/**
+ * Ce qui a bougé dans le coffre sur un intervalle `[depuis, jusqua[`.
+ *
+ * Une seule fonction pour toute l'arithmétique du coffre : le disponible et le
+ * report d'un mois répondent à la même question posée à deux instants. Deux
+ * calculs séparés finiraient par diverger sur un détail — le fond de caisse, ou
+ * la dépense réglée au comptoir — et l'écran contredirait l'autre.
+ *
+ * `jusqua` omis vaut « jusqu'à maintenant » : la borne reste ouverte.
+ */
+async function mouvementsCoffre(depuis: Date, jusqua?: Date) {
+  const borne = jusqua ? { gte: depuis, lt: jusqua } : { gte: depuis };
+
+  const [ouvertures, cloturees, depenses] = await Promise.all([
+    // Fonds de caisse confiés sur l'intervalle : sortis du coffre, ils n'y
+    // reviendront qu'à la clôture, fondus dans le montant versé. Une caisse
+    // ouverte *avant* le début de l'intervalle a sorti son fond avant qu'on ne
+    // compte : il manque déjà au montant de départ, le redéduire creuserait un
+    // trou fictif.
+    prisma.cashRegister.findMany({
+      where: { openedAt: borne },
+      select: { id: true, openedAt: true, openingFloat: true, cashier: { select: { name: true } } },
+    }),
+    prisma.cashRegister.findMany({
+      where: { status: "FERMEE", closedAt: borne },
+      select: {
+        id: true,
+        closedAt: true,
+        declaredAmount: true,
+        correctedAmount: true,
+        cashier: { select: { name: true } },
+      },
+    }),
+    // Les dépenses réglées depuis un tiroir portent leur caisse : elles sont
+    // sorties de là, pas du coffre.
+    prisma.expense.findMany({
+      where: { date: borne, cashRegisterId: null },
+      select: { id: true, date: true, label: true, category: true, amount: true },
+    }),
+  ]);
+
+  const fondsConfies = ouvertures.reduce((s, c) => s + c.openingFloat, 0);
+  const versementsRecus = cloturees.reduce(
+    (s, c) => s + (c.correctedAmount ?? c.declaredAmount ?? 0),
+    0
+  );
+  const depensesReglees = depenses.reduce((s, e) => s + e.amount, 0);
+
+  return {
+    ouvertures,
+    cloturees,
+    depenses,
+    fondsConfies,
+    versementsRecus,
+    depensesReglees,
+    /** Ce que l'intervalle a ajouté au coffre, négatif s'il l'a vidé. */
+    variation: versementsRecus - fondsConfies - depensesReglees,
+  };
+}
+
+/**
+ * Espèces au coffre à un instant donné, reconstruites depuis le dernier comptage
+ * qui le précède. `null` tant qu'aucun comptage n'a amorcé la caisse avant cet
+ * instant : sans origine, le total ne s'appuierait sur rien.
+ */
+export async function getSoldeCoffreAu(instant: Date) {
+  const comptage = await prisma.cashCount.findFirst({
+    where: { countedAt: { lte: instant } },
+    orderBy: { countedAt: "desc" },
+    include: { user: { select: { name: true } } },
+  });
+  if (!comptage) return null;
+
+  const { variation } = await mouvementsCoffre(comptage.countedAt, instant);
+  return { comptage, solde: comptage.amount + variation };
+}
+
+export type ReportDuMois = NonNullable<Awaited<ReturnType<typeof getReportDuMois>>>;
+
+/**
+ * Ce que le mois doit aux espèces déjà présentes au coffre quand il a commencé.
+ *
+ * Un mois qui démarre sur une réserve ne se lit pas comme un mois qui démarre à
+ * zéro : les achats des premiers jours sortent d'un argent que le mois n'a pas
+ * encore gagné. Le résultat comptable, lui, ne bouge pas — une charge reste
+ * rattachée au mois où elle est engagée — mais il cesse de se lire comme un trou
+ * dès qu'on voit ce qui l'a financé.
+ *
+ * `null` tant qu'aucun comptage n'a précédé le début du mois : sans report
+ * connu, il n'y a rien à raconter.
+ */
+export async function getReportDuMois(debut: Date, fin: Date, maintenant = new Date()) {
+  // Un mois en cours s'arrête à aujourd'hui : projeter le coffre jusqu'au 31
+  // ferait apparaître un solde à une date où rien n'a encore été encaissé.
+  const borne = maintenant < fin ? maintenant : fin;
+
+  const ouverture = await getSoldeCoffreAu(debut);
+  if (!ouverture) return null;
+
+  const [cloture, mouvements] = await Promise.all([
+    getSoldeCoffreAu(borne),
+    mouvementsCoffre(debut, borne),
+  ]);
+
+  const soldeActuel = cloture?.solde ?? ouverture.solde;
+
+  // ------------------------------------------------- Le creux du mois
+  //
+  // Cumul des seuls mouvements du mois, en partant de zéro : il dit de combien
+  // le mois a dépensé plus qu'il n'a encaissé, indépendamment de ce que le
+  // coffre contenait. Son point le plus bas est le moment où le mois s'est le
+  // plus appuyé sur le report — sans lui, le coffre y aurait été à découvert
+  // d'autant.
+  //
+  // Le cumul se fait par jour et non mouvement par mouvement : une dépense est
+  // datée au jour, un versement à l'heure de clôture, si bien qu'à l'intérieur
+  // d'une journée les achats du matin passent tous avant la remise du soir. Un
+  // creux mesuré à la ligne ne serait qu'un artefact de cette datation.
+  const parJour = new Map<string, number>();
+  const ajouter = (date: Date, montant: number) => {
+    const cle = format(date, "yyyy-MM-dd");
+    parJour.set(cle, (parJour.get(cle) ?? 0) + montant);
+  };
+  for (const c of mouvements.cloturees) {
+    if (c.closedAt) ajouter(c.closedAt, c.correctedAmount ?? c.declaredAmount ?? 0);
+  }
+  for (const c of mouvements.ouvertures) ajouter(c.openedAt, -c.openingFloat);
+  for (const e of mouvements.depenses) ajouter(e.date, -e.amount);
+
+  let cumul = 0;
+  let creux: { date: Date; montant: number } | null = null;
+  for (const [cle, net] of Array.from(parJour.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+    cumul += net;
+    if (cumul < 0 && (creux == null || -cumul > creux.montant)) {
+      creux = { date: new Date(`${cle}T00:00:00.000Z`), montant: -cumul };
+    }
+  }
+
+  return {
+    /** Comptage sur lequel s'appuie le report, pour que le chiffre se vérifie. */
+    comptage: ouverture.comptage,
+    report: ouverture.solde,
+    soldeActuel,
+    /** Ce que le mois a prélevé sur le report, négatif s'il l'a au contraire regarni. */
+    entame: ouverture.solde - soldeActuel,
+    creux,
+  };
+}
+
 export async function getCaisseComptable() {
   const comptagesBruts = await prisma.cashCount.findMany({
     include: { user: { select: { name: true } } },
@@ -81,40 +231,17 @@ export async function getCaisseComptable() {
 
   const depuis = dernier.countedAt;
 
-  const [ouvertures, cloturees, depenses] = await Promise.all([
-    // Fonds de caisse confiés depuis le comptage : sortis du coffre, ils n'y
-    // reviendront qu'à la clôture, fondus dans le montant versé. Une caisse
-    // ouverte *avant* le comptage a sorti son fond avant qu'on ne compte : il
-    // manque déjà au montant compté, le redéduire creuserait un trou fictif.
-    prisma.cashRegister.findMany({
-      where: { openedAt: { gte: depuis } },
-      select: { id: true, openedAt: true, openingFloat: true, cashier: { select: { name: true } } },
-    }),
-    prisma.cashRegister.findMany({
-      where: { status: "FERMEE", closedAt: { gte: depuis } },
-      select: {
-        id: true,
-        closedAt: true,
-        declaredAmount: true,
-        correctedAmount: true,
-        cashier: { select: { name: true } },
-      },
-    }),
-    // Les dépenses réglées depuis un tiroir portent leur caisse : elles sont
-    // sorties de là, pas du coffre.
-    prisma.expense.findMany({
-      where: { date: { gte: depuis }, cashRegisterId: null },
-      select: { id: true, date: true, label: true, category: true, amount: true },
-    }),
-  ]);
+  const {
+    ouvertures,
+    cloturees,
+    depenses,
+    fondsConfies,
+    versementsRecus,
+    depensesReglees,
+    variation,
+  } = await mouvementsCoffre(depuis);
 
-  const fondsConfies = ouvertures.reduce((s, c) => s + c.openingFloat, 0);
-  const versementsRecus = cloturees.reduce(
-    (s, c) => s + (c.correctedAmount ?? c.declaredAmount ?? 0),
-    0
-  );
-  const depensesReglees = depenses.reduce((s, e) => s + e.amount, 0);
-  const disponible = dernier.amount + versementsRecus - fondsConfies - depensesReglees;
+  const disponible = dernier.amount + variation;
 
   // ------------------------------------------------------------- Livre de caisse
 
