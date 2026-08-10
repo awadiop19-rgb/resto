@@ -8,7 +8,7 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
-import { getReportDuMois } from "@/lib/caisse-comptable";
+import { getTresorerieDuMois } from "@/lib/caisse-comptable";
 import { JOURS_AVANT_PROJECTION, niveauPourTaux, SEUILS } from "@/lib/mois-verdict";
 
 /**
@@ -33,7 +33,7 @@ export async function getMoisComptable(maintenant = new Date()) {
   const debut = startOfMonth(maintenant);
   const finDuMois = endOfMonth(maintenant);
 
-  const [paiements, depensesBrutes, report] = await Promise.all([
+  const [paiements, depensesBrutes, tresorerie] = await Promise.all([
     prisma.payment.findMany({
       where: { createdAt: { gte: debut, lte: finDuMois } },
       select: { amount: true, method: true, createdAt: true },
@@ -42,11 +42,11 @@ export async function getMoisComptable(maintenant = new Date()) {
       where: { date: { gte: debut, lte: finDuMois } },
       select: { amount: true, category: true, date: true, stockMovement: { select: { id: true } } },
     }),
-    // Les espèces déjà au coffre quand le mois a commencé. Elles ne changent
-    // rien au résultat, mais disent avec quel argent les premiers achats ont
-    // été réglés — un mois qui démarre sur une réserve n'est pas un mois qui
-    // démarre à zéro.
-    getReportDuMois(debut, finDuMois, maintenant),
+    // L'argent dont le mois disposait en commençant, coffre et compte Wave. Il
+    // ne change rien au résultat, mais dit avec quoi les premiers achats ont été
+    // réglés — un mois qui démarre sur une réserve n'est pas un mois qui démarre
+    // à zéro — et où sont passées les recettes qui n'ont pas fini au coffre.
+    getTresorerieDuMois(debut, finDuMois, maintenant),
   ]);
 
   const recettes = paiements.reduce((s, p) => s + p.amount, 0);
@@ -185,7 +185,7 @@ export async function getMoisComptable(maintenant = new Date()) {
     serie,
     parCategorie,
     achatsStock,
-    report,
+    tresorerie,
 
     recettesProjetees,
     depensesProjetees,

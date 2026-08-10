@@ -132,10 +132,47 @@ export async function getSoldeCoffreAu(instant: Date) {
   return { comptage, solde: comptage.amount + variation };
 }
 
-export type ReportDuMois = NonNullable<Awaited<ReturnType<typeof getReportDuMois>>>;
+/**
+ * Le compte Wave, seconde poche de la trésorerie.
+ *
+ * L'argent Wave va directement au compte marchand du restaurant : il n'entre
+ * jamais au coffre, et le versement du soir n'en porte rien — le tiroir d'un
+ * caissier ne contient que des espèces. Ignorer cette poche donne une image
+ * fausse d'un mois qui encaisse beaucoup en Wave : le coffre se vide au rythme
+ * des achats pendant qu'une part des recettes s'accumule ailleurs, et le seul
+ * coffre donne à voir une maison exsangue alors que l'argent est là.
+ *
+ * Le compte ne se compte pas comme le coffre : personne n'y touche, donc rien
+ * n'en sort et son solde est le cumul de ce qui y est entré. Ce cumul ne part
+ * pourtant pas d'un relevé mais du premier encaissement enregistré : c'est ce
+ * que l'application a vu passer, non le solde du compte, qui pouvait déjà
+ * contenir quelque chose avant qu'elle n'existe. L'écran doit le dire ainsi.
+ */
+export async function getCompteWave(debut: Date, jusqua: Date) {
+  const [avant, pendant] = await Promise.all([
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { method: "WAVE", createdAt: { lt: debut } },
+    }),
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { method: "WAVE", createdAt: { gte: debut, lt: jusqua } },
+    }),
+  ]);
+
+  // Le mode retenu est celui qui fait foi aujourd'hui : une touche mal appuyée
+  // par le caissier puis corrigée par la comptabilité a déplacé l'encaissement
+  // d'une poche à l'autre, et c'est la correction qui dit où l'argent est.
+  const report = avant._sum.amount ?? 0;
+  const encaisse = pendant._sum.amount ?? 0;
+
+  return { report, encaisse, solde: report + encaisse };
+}
+
+export type TresorerieDuMois = NonNullable<Awaited<ReturnType<typeof getTresorerieDuMois>>>;
 
 /**
- * Ce que le mois doit aux espèces déjà présentes au coffre quand il a commencé.
+ * Avec quel argent le mois a réglé ses premiers achats, et ce qu'il en reste.
  *
  * Un mois qui démarre sur une réserve ne se lit pas comme un mois qui démarre à
  * zéro : les achats des premiers jours sortent d'un argent que le mois n'a pas
@@ -143,10 +180,16 @@ export type ReportDuMois = NonNullable<Awaited<ReturnType<typeof getReportDuMois
  * rattachée au mois où elle est engagée — mais il cesse de se lire comme un trou
  * dès qu'on voit ce qui l'a financé.
  *
- * `null` tant qu'aucun comptage n'a précédé le début du mois : sans report
- * connu, il n'y a rien à raconter.
+ * La trésorerie tient en deux poches qui ne se comportent pas de la même façon,
+ * et les additionner sans les distinguer effacerait justement ce qui explique le
+ * mois : le coffre est la seule où le mois puise, le compte Wave ne fait que se
+ * remplir. Un mois peut donc vider le premier tout en gagnant de l'argent, si
+ * ses recettes rentrent d'un côté et ses achats sortent de l'autre.
+ *
+ * `null` tant qu'aucun comptage n'a précédé le début du mois : sans coffre
+ * connu au départ, il n'y a rien à raconter.
  */
-export async function getReportDuMois(debut: Date, fin: Date, maintenant = new Date()) {
+export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = new Date()) {
   // Un mois en cours s'arrête à aujourd'hui : projeter le coffre jusqu'au 31
   // ferait apparaître un solde à une date où rien n'a encore été encaissé.
   const borne = maintenant < fin ? maintenant : fin;
@@ -154,9 +197,10 @@ export async function getReportDuMois(debut: Date, fin: Date, maintenant = new D
   const ouverture = await getSoldeCoffreAu(debut);
   if (!ouverture) return null;
 
-  const [cloture, mouvements] = await Promise.all([
+  const [cloture, mouvements, wave] = await Promise.all([
     getSoldeCoffreAu(borne),
     mouvementsCoffre(debut, borne),
+    getCompteWave(debut, borne),
   ]);
 
   const soldeActuel = cloture?.solde ?? ouverture.solde;
@@ -193,14 +237,30 @@ export async function getReportDuMois(debut: Date, fin: Date, maintenant = new D
     }
   }
 
-  return {
+  const coffre = {
     /** Comptage sur lequel s'appuie le report, pour que le chiffre se vérifie. */
     comptage: ouverture.comptage,
     report: ouverture.solde,
-    soldeActuel,
+    solde: soldeActuel,
     /** Ce que le mois a prélevé sur le report, négatif s'il l'a au contraire regarni. */
     entame: ouverture.solde - soldeActuel,
     creux,
+    /**
+     * Un coffre ne peut pas contenir moins que rien. S'il y descend, ce n'est
+     * pas la maison qui est à sec : c'est le calcul qui a perdu le fil, faute
+     * d'un comptage récent ou parce qu'un achat a été réglé autrement qu'en
+     * espèces prises au coffre. Le signaler vaut mieux que d'afficher un
+     * négatif comme s'il se constatait.
+     */
+    impossible: soldeActuel < 0,
+  };
+
+  return {
+    coffre,
+    wave,
+    /** Les deux poches réunies : ce que le mois avait, et ce qu'il lui reste. */
+    report: coffre.report + wave.report,
+    solde: coffre.solde + wave.solde,
   };
 }
 
