@@ -107,6 +107,12 @@ const mouvementSchema = z.object({
   /** L'ajustement seul peut retirer du stock avec une quantité saisie en positif. */
   sensNegatif: z.boolean().optional(),
   unitPrice: z.number().min(0).optional(),
+  /**
+   * Avec quoi l'achat a été réglé. Seul l'achat en a un : les autres mouvements
+   * ne créent pas de dépense, et rien n'a été payé pour une sortie vers la
+   * cuisine ou une correction d'inventaire.
+   */
+  method: z.enum(["CASH", "WAVE"]).optional(),
   supplier: z.string().trim().optional(),
   note: z.string().trim().optional(),
   date: z.string().min(1, "Date requise"),
@@ -150,6 +156,13 @@ export async function enregistrerMouvement(input: MouvementInput) {
     return refus("Le prix unitaire d'achat est requis");
   }
 
+  // Un achat crée une dépense, et une dépense sort d'une poche. Sans mode, elle
+  // retomberait dans la zone d'ombre que porte l'historique : le coffre la
+  // paierait par défaut, qu'il l'ait payée ou non.
+  if (data.type === "ACHAT" && data.method == null) {
+    return refus("Indiquez avec quoi l'achat a été réglé");
+  }
+
   const delta =
     data.type === "ACHAT" || data.type === "PRODUCTION"
       ? data.quantity
@@ -187,6 +200,7 @@ export async function enregistrerMouvement(input: MouvementInput) {
               amount: montant,
               category: produit.category,
               date,
+              method: data.method,
               userId: session.user.id,
             },
           })

@@ -107,14 +107,19 @@ function JaugeTaux({
   );
 }
 
-/** Une poche de la trésorerie : son parcours, du départ au 31. */
+/**
+ * Une poche de la trésorerie : son parcours, du départ au 31.
+ *
+ * Les mouvements sont une liste et non un chiffre unique : le coffre n'a qu'un
+ * solde net à raconter, mais le Wave se remplit d'un côté et se vide de l'autre,
+ * et les fondre en un net masquerait l'ampleur des deux.
+ */
 function Poche({
   titre,
   legende,
   couleur,
   debut,
-  mouvementLabel,
-  mouvement,
+  mouvements,
   fin,
   alerte,
   projete,
@@ -124,8 +129,7 @@ function Poche({
   legende: string;
   couleur: string;
   debut: number;
-  mouvementLabel: string;
-  mouvement: number;
+  mouvements: { label: string; montant: number }[];
   fin: number;
   alerte?: boolean;
   /** Où la poche finirait le mois au rythme actuel, `null` s'il est trop tôt. */
@@ -144,10 +148,12 @@ function Poche({
           <dt className="text-xs text-slate-400">En début de mois</dt>
           <dd className="text-sm font-medium tabular-nums">{formatFCFA(debut)}</dd>
         </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-xs text-slate-400">{mouvementLabel}</dt>
-          <dd className="text-sm font-medium tabular-nums">{formatFCFA(Math.abs(mouvement))}</dd>
-        </div>
+        {mouvements.map((m) => (
+          <div key={m.label} className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-400">{m.label}</dt>
+            <dd className="text-sm font-medium tabular-nums">{formatFCFA(Math.abs(m.montant))}</dd>
+          </div>
+        ))}
         <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-1.5">
           <dt className="text-xs font-medium text-slate-600">Aujourd&apos;hui</dt>
           <dd
@@ -204,7 +210,7 @@ function BlocTresorerie({
   resultat: number;
   joursDansLeMois: number;
 }) {
-  const { coffre, wave, projection } = tresorerie;
+  const { coffre, wave, projection, nonRenseignees } = tresorerie;
   const projeteLabel = `Au ${joursDansLeMois}, au rythme actuel`;
   // Un coffre peut être regarni plutôt qu'entamé : un mois qui encaisse en
   // espèces plus qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a
@@ -222,18 +228,19 @@ function BlocTresorerie({
       </div>
       <p className="mt-0.5 text-xs text-slate-400">
         L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en reste. Il tient en
-        deux poches qui ne se comportent pas pareil : les achats se règlent au coffre, jamais en
-        Wave.
+        deux poches : les espèces du coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou
+        de l&apos;autre, selon le règlement indiqué à la saisie.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Poche
           titre="Coffre"
-          legende="Espèces : versements du soir, achats de la comptabilité"
+          legende="Espèces : versements du soir, achats réglés en espèces"
           couleur={CHART.especes}
           debut={coffre.report}
-          mouvementLabel={consomme ? "Entamé depuis" : "Regarni depuis"}
-          mouvement={coffre.entame}
+          mouvements={[
+            { label: consomme ? "Entamé depuis" : "Regarni depuis", montant: coffre.entame },
+          ]}
           fin={coffre.solde}
           alerte={coffre.impossible}
           projete={projection?.coffre}
@@ -241,11 +248,13 @@ function BlocTresorerie({
         />
         <Poche
           titre="Compte Wave"
-          legende="Encaissé depuis le démarrage, jamais entamé"
+          legende="Recettes Wave, moins les achats réglés en Wave"
           couleur={CHART.wave}
           debut={wave.report}
-          mouvementLabel="Encaissé ce mois-ci"
-          mouvement={wave.encaisse}
+          mouvements={[
+            { label: "Encaissé ce mois-ci", montant: wave.encaisse },
+            ...(wave.depense > 0 ? [{ label: "Dépensé ce mois-ci", montant: wave.depense }] : []),
+          ]}
           fin={wave.solde}
           projete={projection?.wave}
           projeteLabel={projeteLabel}
@@ -263,20 +272,23 @@ function BlocTresorerie({
         </span>
       </div>
 
-      {/* Le coffre est la seule poche qui puisse manquer : c'est de là que
-          sortent les achats. L'annoncer à date donne le temps de décaler un
-          réapprovisionnement — une fois le coffre vide, il n'y a plus de choix
-          à faire. */}
-      {projection?.rupture && (
+      {/* Tant qu'une dépense ignore sa poche, le coffre la porte par défaut :
+          les deux soldes sont alors des bornes, pas des faits. Le dire avant les
+          autres alertes, parce que c'est ce qui les explique le plus souvent. */}
+      {nonRenseignees.nombre > 0 && (
         <p className="mt-3 rounded-md border border-[#fab219] bg-[#fab219]/10 px-3 py-2 text-sm text-slate-700">
           <span className="font-semibold">
-            Le coffre serait vide vers le {formatDate(projection.rupture)}
-          </span>
-          , avant la fin du mois : il se vide de{" "}
-          {formatFCFA(Math.round(-projection.rythmeCoffre))} par jour
-          {wave.encaisse > 0 && ", pendant que les recettes Wave s'accumulent hors de sa portée"}. Ce
-          n&apos;est pas une perte — le résultat du mois n&apos;en dit rien — mais les achats se
-          règlent en espèces, et il n&apos;y en aurait plus.
+            {nonRenseignees.nombre} dépense{nonRenseignees.nombre > 1 ? "s" : ""} du mois
+            n&apos;{nonRenseignees.nombre > 1 ? "indiquent" : "indique"} pas comment
+            {nonRenseignees.nombre > 1 ? " elles ont" : " elle a"} été réglée
+            {nonRenseignees.nombre > 1 ? "s" : ""}
+          </span>{" "}
+          ({formatFCFA(nonRenseignees.montant)}). Le coffre les porte toutes, faute de savoir : s&apos;il
+          s&apos;en trouve des Wave, le coffre est en réalité plus garni et le compte Wave plus
+          léger que ce qui est affiché ici.{" "}
+          <Link href="/depenses" className="font-medium text-orange-600 hover:underline">
+            Les renseigner
+          </Link>
         </p>
       )}
 
@@ -285,13 +297,44 @@ function BlocTresorerie({
       {coffre.impossible && (
         <p className="mt-3 rounded-md border border-[#d03b3b] bg-[#d03b3b]/5 px-3 py-2 text-sm text-slate-700">
           <span className="font-semibold text-[#d03b3b]">Le coffre ressort négatif</span>, ce
-          qu&apos;un coffre ne peut pas être : il manque quelque chose au calcul. Soit un comptage
-          récent, qui le recalerait sur ce qu&apos;il contient réellement ; soit des achats réglés
-          autrement qu&apos;en espèces prises au coffre, que rien ne permet aujourd&apos;hui de
-          distinguer.{" "}
+          qu&apos;un coffre ne peut pas être : il manque quelque chose au calcul.{" "}
+          {nonRenseignees.nombre > 0
+            ? "Commencez par les dépenses ci-dessus dont le règlement n'est pas renseigné : celles qui étaient des Wave creusent le coffre à tort."
+            : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
           <Link href="/comptabilite/caisse" className="font-medium text-orange-600 hover:underline">
             Compter la caisse
           </Link>
+        </p>
+      )}
+
+      {/* Le coffre se vide quand le Wave, lui, ne fait souvent que se remplir.
+          L'annoncer à date donne le temps de décaler un réapprovisionnement —
+          une fois le coffre vide, il n'y a plus de choix à faire. */}
+      {projection?.rupture && (
+        <p className="mt-3 rounded-md border border-[#fab219] bg-[#fab219]/10 px-3 py-2 text-sm text-slate-700">
+          <span className="font-semibold">
+            Le coffre serait vide vers le {formatDate(projection.rupture)}
+          </span>
+          , avant la fin du mois : il se vide de{" "}
+          {formatFCFA(Math.round(-projection.rythmeCoffre))} par jour
+          {projection.rythmeWave > 0 &&
+            ", pendant que le compte Wave se garnit de " +
+              formatFCFA(Math.round(projection.rythmeWave)) +
+              " par jour"}
+          . Ce n&apos;est pas une perte — le résultat du mois n&apos;en dit rien — mais les achats
+          en espèces n&apos;auraient plus de quoi être réglés.
+        </p>
+      )}
+
+      {/* Un Wave négatif n'est pas une anomalie de calcul, contrairement au
+          coffre : le solde part du premier encaissement vu par l'application, et
+          le compte pouvait déjà contenir quelque chose avant elle. */}
+      {wave.solde < 0 && (
+        <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          Le compte Wave ressort négatif : la maison y a réglé plus de dépenses que
+          l&apos;application ne lui a vu encaisser de recettes. Ce n&apos;est pas nécessairement un
+          découvert — ce solde n&apos;est pas un relevé, il part du premier encaissement enregistré
+          et ignore ce que le compte contenait avant.
         </p>
       )}
 
@@ -301,11 +344,11 @@ function BlocTresorerie({
       {wave.encaisse > 0 && (
         <p className="mt-3 text-sm text-slate-600">
           <span className="font-semibold text-slate-900">{partWave.toFixed(0)} %</span> des recettes
-          du mois ({formatFCFA(wave.encaisse)}) sont entrées sur le compte Wave, hors du coffre où se
-          règlent les achats.{" "}
+          du mois ({formatFCFA(wave.encaisse)}) sont entrées sur le compte Wave, dont{" "}
+          {formatFCFA(wave.depense)} en sont ressortis pour régler des achats.{" "}
           {consomme
-            ? "Le coffre se vide donc plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
-            : "Le coffre n'en a pas moins tenu : les espèces encaissées ont suffi aux achats du mois."}
+            ? "Le coffre se vide malgré tout plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
+            : "Le coffre n'en a pas moins tenu : les espèces encaissées ont suffi aux achats qu'il a portés."}
         </p>
       )}
 

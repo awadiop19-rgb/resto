@@ -90,10 +90,20 @@ async function mouvementsCoffre(depuis: Date, jusqua?: Date) {
       },
     }),
     // Les dépenses réglées depuis un tiroir portent leur caisse : elles sont
-    // sorties de là, pas du coffre.
+    // sorties de là, pas du coffre. Celles réglées en Wave n'y sont pas passées
+    // non plus — elles sortent du compte marchand, que `getCompteWave` débite.
+    //
+    // Le mode nul est traité comme des espèces : c'est ce que ce calcul
+    // supposait avant que la dépense ne porte son règlement, et le changer
+    // silencieusement déplacerait des sommes d'une poche à l'autre sans que
+    // personne ne l'ait dit. L'écran signale l'hypothèse au lieu de la taire.
     prisma.expense.findMany({
-      where: { date: borne, cashRegisterId: null },
-      select: { id: true, date: true, label: true, category: true, amount: true },
+      where: {
+        date: borne,
+        cashRegisterId: null,
+        OR: [{ method: null }, { method: "CASH" }],
+      },
+      select: { id: true, date: true, label: true, category: true, amount: true, method: true },
     }),
   ]);
 
@@ -143,31 +153,52 @@ export async function getSoldeCoffreAu(instant: Date) {
  * des achats pendant qu'une part des recettes s'accumule ailleurs, et le seul
  * coffre donne à voir une maison exsangue alors que l'argent est là.
  *
- * Le compte ne se compte pas comme le coffre : personne n'y touche, donc rien
- * n'en sort et son solde est le cumul de ce qui y est entré. Ce cumul ne part
- * pourtant pas d'un relevé mais du premier encaissement enregistré : c'est ce
- * que l'application a vu passer, non le solde du compte, qui pouvait déjà
- * contenir quelque chose avant qu'elle n'existe. L'écran doit le dire ainsi.
+ * La poche se remplit et se vide : la maison règle aussi des dépenses en Wave.
+ * Les compter ici est la contrepartie de les retirer du coffre — une dépense
+ * sort d'une poche et d'une seule, sans quoi elle disparaîtrait des deux ou
+ * serait payée deux fois.
+ *
+ * Reste que son solde ne part pas d'un relevé mais du premier encaissement
+ * enregistré : c'est ce que l'application a vu passer, non le solde du compte,
+ * qui pouvait déjà contenir quelque chose avant qu'elle n'existe. Un solde Wave
+ * négatif ne dit donc pas que le compte est à découvert, seulement que la
+ * maison y a dépensé plus que ce que l'application lui a vu encaisser. L'écran
+ * doit le dire ainsi, et ne pas crier à l'erreur comme pour le coffre.
  */
 export async function getCompteWave(debut: Date, jusqua: Date) {
-  const [avant, pendant] = await Promise.all([
-    prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { method: "WAVE", createdAt: { lt: debut } },
-    }),
-    prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { method: "WAVE", createdAt: { gte: debut, lt: jusqua } },
-    }),
-  ]);
-
   // Le mode retenu est celui qui fait foi aujourd'hui : une touche mal appuyée
   // par le caissier puis corrigée par la comptabilité a déplacé l'encaissement
   // d'une poche à l'autre, et c'est la correction qui dit où l'argent est.
-  const report = avant._sum.amount ?? 0;
-  const encaisse = pendant._sum.amount ?? 0;
+  const encaissements = { method: "WAVE" } as const;
+  // Une dépense réglée en Wave depuis un tiroir de caissier n'existe pas : le
+  // tiroir ne contient que des espèces. La garde vaut pour une saisie aberrante,
+  // qui sortirait sinon des deux poches à la fois.
+  const reglements = { method: "WAVE", cashRegisterId: null } as const;
 
-  return { report, encaisse, solde: report + encaisse };
+  const [encaisseAvant, encaissePendant, sortiAvant, sortiPendant] = await Promise.all([
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { ...encaissements, createdAt: { lt: debut } },
+    }),
+    prisma.payment.aggregate({
+      _sum: { amount: true },
+      where: { ...encaissements, createdAt: { gte: debut, lt: jusqua } },
+    }),
+    prisma.expense.aggregate({
+      _sum: { amount: true },
+      where: { ...reglements, date: { lt: debut } },
+    }),
+    prisma.expense.aggregate({
+      _sum: { amount: true },
+      where: { ...reglements, date: { gte: debut, lt: jusqua } },
+    }),
+  ]);
+
+  const report = (encaisseAvant._sum.amount ?? 0) - (sortiAvant._sum.amount ?? 0);
+  const encaisse = encaissePendant._sum.amount ?? 0;
+  const depense = sortiPendant._sum.amount ?? 0;
+
+  return { report, encaisse, depense, solde: report + encaisse - depense };
 }
 
 export type TresorerieDuMois = NonNullable<Awaited<ReturnType<typeof getTresorerieDuMois>>>;
@@ -257,7 +288,10 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
   const joursEcoules = differenceInCalendarDays(borne, debut) + 1;
   const joursRestants = Math.max(0, differenceInCalendarDays(fin, borne));
   const rythmeCoffre = mouvements.variation / joursEcoules;
-  const rythmeWave = wave.encaisse / joursEcoules;
+  // Le Wave se prolonge sur son mouvement net, entrées moins sorties : depuis
+  // que la maison y règle aussi des dépenses, la seule cadence d'encaissement le
+  // ferait gonfler d'un argent qui en ressort par ailleurs.
+  const rythmeWave = (wave.encaisse - wave.depense) / joursEcoules;
 
   /**
    * Le jour où le coffre tomberait à zéro au rythme actuel, `null` s'il tient le
@@ -305,9 +339,21 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     impossible: soldeActuel < 0,
   };
 
+  // Les dépenses du mois dont on ignore le règlement. Le coffre les porte faute
+  // de mieux, mais c'est une hypothèse : tant qu'il en reste, le solde du coffre
+  // est un minorant et celui du Wave un majorant. L'écran le dit plutôt que de
+  // présenter les deux poches comme établies — c'est aussi la première chose à
+  // vérifier devant un coffre qui ressort négatif.
+  const sansMode = mouvements.depenses.filter((e) => e.method == null);
+  const nonRenseignees = {
+    nombre: sansMode.length,
+    montant: sansMode.reduce((s, e) => s + e.amount, 0),
+  };
+
   return {
     coffre,
     wave,
+    nonRenseignees,
     /** Les deux poches réunies : ce que le mois avait, et ce qu'il lui reste. */
     report: coffre.report + wave.report,
     solde: coffre.solde + wave.solde,

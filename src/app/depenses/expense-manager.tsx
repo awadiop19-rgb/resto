@@ -2,10 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createExpense, deleteExpense, type DoublonPresume } from "@/lib/actions/expenses";
+import {
+  createExpense,
+  deleteExpense,
+  setExpenseMethod,
+  type DoublonPresume,
+} from "@/lib/actions/expenses";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatDate } from "@/lib/format";
+
+type ModeReglement = "CASH" | "WAVE";
 
 type Expense = {
   id: string;
@@ -13,10 +20,19 @@ type Expense = {
   amount: number;
   category: string;
   date: Date;
+  /** Nul pour les dépenses saisies avant que la question ne soit posée. */
+  method: ModeReglement | null;
+  /** Réglée depuis le tiroir d'un caissier : espèces par nature, non modifiable. */
+  cashRegisterId: string | null;
   user: { name: string };
 };
 
 const CATEGORIES = ["Ingrédients", "Boissons", "Équipement", "Salaires", "Loyer", "Autre"];
+
+const MODES: { value: ModeReglement; libelle: string }[] = [
+  { value: "CASH", libelle: "Espèces" },
+  { value: "WAVE", libelle: "Wave" },
+];
 
 export function ExpenseManager({
   expenses,
@@ -40,9 +56,14 @@ export function ExpenseManager({
     amount: "",
     category: CATEGORIES[0],
     date: aujourdhui,
+    method: "CASH" as ModeReglement,
   });
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  // Les dépenses d'avant la colonne : le coffre les porte faute de savoir, et
+  // celles qui étaient des Wave l'ont creusé à tort. Les compter ici donne au
+  // comptable la mesure de ce qu'il lui reste à renseigner.
+  const aRenseigner = expenses.filter((e) => e.method == null);
   const surUnJour = debut === fin;
   // Le Z n'est pas decoratif : sans lui, "2026-08-03T00:00:00" serait lu dans le
   // fuseau du navigateur, et le libelle annoncerait la veille depuis l'est de GMT.
@@ -58,16 +79,37 @@ export function ExpenseManager({
 
   function exportCsv() {
     const rows: (string | number)[][] = [
-      ["Date", "Libellé", "Catégorie", "Montant (F)", "Ajouté par"],
+      ["Date", "Libellé", "Catégorie", "Montant (F)", "Réglée en", "Ajouté par"],
       ...expenses.map((e) => [
         formatDate(e.date),
         e.label,
         e.category,
         e.amount,
+        libelleMode(e),
         e.user.name,
       ]),
     ];
     downloadCsv(`depenses_${debut}_${fin}.csv`, rows);
+  }
+
+  function libelleMode(e: Expense) {
+    if (e.cashRegisterId) return "Espèces (tiroir)";
+    if (e.method == null) return "Non renseigné";
+    return MODES.find((m) => m.value === e.method)!.libelle;
+  }
+
+  // Le re-marquage écrit tout de suite : c'est une correction d'inventaire, pas
+  // une saisie. Un bouton « Enregistrer » par ligne ferait porter à un travail
+  // de rattrapage la cérémonie d'une création.
+  function marquer(id: string, method: ModeReglement) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        assurerSucces(await setExpenseMethod(id, method));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Modification impossible");
+      }
+    });
   }
 
   // Une dépense adossée à un achat de stock refuse d'être supprimée seule :
@@ -100,6 +142,7 @@ export function ExpenseManager({
             amount: Number(form.amount),
             category: form.category,
             date: form.date,
+            method: form.method,
             confirme,
           })
         );
@@ -108,7 +151,15 @@ export function ExpenseManager({
           return;
         }
         const enregistree = form.date;
-        setForm({ label: "", amount: "", category: CATEGORIES[0], date: aujourdhui });
+        // Le mode retenu survit à la remise à zéro : le comptable qui saisit le
+        // marché du jour enchaîne des dépenses réglées de la même façon.
+        setForm((f) => ({
+          label: "",
+          amount: "",
+          category: CATEGORIES[0],
+          date: aujourdhui,
+          method: f.method,
+        }));
         // Une dépense datée hors de la période affichée n'apparaîtrait nulle part :
         // enregistrée pour de bon, mais invisible. On va la montrer où elle est.
         if (enregistree < debut || enregistree > fin) voir(enregistree, enregistree);
@@ -161,6 +212,20 @@ export function ExpenseManager({
             onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm sm:col-span-2"
           />
+          {/* Le mode de règlement décide de la poche qui paie : sans lui, le
+              coffre porterait une dépense sortie du compte Wave. */}
+          <select
+            aria-label="Réglée en"
+            value={form.method}
+            onChange={(e) => setForm((f) => ({ ...f, method: e.target.value as ModeReglement }))}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+          >
+            {MODES.map((m) => (
+              <option key={m.value} value={m.value}>
+                Réglée en {m.libelle.toLowerCase()}
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             placeholder="Montant"
@@ -261,6 +326,21 @@ export function ExpenseManager({
             )}
           </div>
         </div>
+        {/* Le rattrapage de l'historique : tant qu'une dépense ignore sa poche,
+            le coffre la paie par défaut. Dire combien il en reste évite que le
+            comptable ait à parcourir la liste pour le savoir. */}
+        {aRenseigner.length > 0 && (
+          <p className="mb-3 rounded-md border border-[#fab219] bg-[#fab219]/10 px-3 py-2 text-sm text-slate-700">
+            <span className="font-semibold">
+              {aRenseigner.length} dépense{aRenseigner.length > 1 ? "s" : ""} sans mode de règlement
+            </span>{" "}
+            sur cette période, pour {aRenseigner.reduce((s, e) => s + e.amount, 0).toLocaleString("fr-FR")} F.
+            Elles sont saisies avant que la question ne soit posée : le coffre les porte toutes, y
+            compris celles réglées en Wave, qu&apos;elles creusent à tort. Renseignez-les dans la
+            colonne « Réglée en ».
+          </p>
+        )}
+
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -269,6 +349,7 @@ export function ExpenseManager({
               <th className="pb-2">Libellé</th>
               <th className="pb-2">Catégorie</th>
               <th className="pb-2">Montant</th>
+              <th className="pb-2">Réglée en</th>
               <th className="pb-2">Ajouté par</th>
               <th className="pb-2"></th>
             </tr>
@@ -280,6 +361,33 @@ export function ExpenseManager({
                 <td className="py-2 pr-2">{expense.label}</td>
                 <td className="py-2 pr-2">{expense.category}</td>
                 <td className="py-2 pr-2">{expense.amount.toLocaleString("fr-FR")} F</td>
+                {/* Une dépense sortie d'un tiroir ne se corrige pas : son mode
+                    découle de l'endroit d'où l'argent est sorti, et le versement
+                    du soir a déjà été compté sur ce que le tiroir avait en moins. */}
+                <td className="py-2 pr-2">
+                  {expense.cashRegisterId ? (
+                    <span className="text-slate-500">Espèces (tiroir)</span>
+                  ) : (
+                    <select
+                      aria-label={`Mode de règlement de ${expense.label}`}
+                      value={expense.method ?? ""}
+                      disabled={isPending}
+                      onChange={(e) => marquer(expense.id, e.target.value as ModeReglement)}
+                      className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+                        expense.method == null
+                          ? "border-[#fab219] bg-[#fab219]/10 font-medium"
+                          : "border-slate-300"
+                      }`}
+                    >
+                      {expense.method == null && <option value="">À renseigner</option>}
+                      {MODES.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </td>
                 <td className="py-2 pr-2 text-slate-500">{expense.user.name}</td>
                 <td className="py-2 pr-2 text-right">
                   <button
@@ -293,7 +401,7 @@ export function ExpenseManager({
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-4 text-center text-slate-400">
+                <td colSpan={7} className="py-4 text-center text-slate-400">
                   {surUnJour ? "Aucune dépense ce jour-là." : "Aucune dépense sur cette période."}
                 </td>
               </tr>

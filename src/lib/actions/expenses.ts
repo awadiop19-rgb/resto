@@ -12,6 +12,12 @@ const expenseSchema = z.object({
   amount: z.number().positive("Le montant doit être positif"),
   category: z.string().min(1, "Catégorie requise"),
   date: z.string().min(1, "Date requise"),
+  /**
+   * Avec quoi la dépense a été réglée. Exigé à la saisie, alors que la colonne
+   * accepte le nul : ce nul est réservé à l'historique d'avant la question. Une
+   * nouvelle dépense sans règlement rouvrirait la zone d'ombre qu'on referme.
+   */
+  method: z.enum(["CASH", "WAVE"], { message: "Mode de règlement requis" }),
   /** Le comptable a vu l'avertissement de doublon et maintient la saisie. */
   confirme: z.boolean().optional(),
 });
@@ -75,12 +81,53 @@ export async function createExpense(input: z.infer<typeof expenseSchema>) {
       amount: data.amount,
       category: data.category,
       date: new Date(data.date),
+      method: data.method,
       userId: session.user.id,
     },
   });
 
+  revalider();
+}
+
+/** Les écrans où une dépense change le tableau : le résultat comme les poches. */
+function revalider() {
   revalidatePath("/depenses");
   revalidatePath("/dashboard");
+  revalidatePath("/comptabilite");
+  revalidatePath("/comptabilite/caisse");
+  revalidatePath("/comptabilite/mois");
+}
+
+/**
+ * Rattacher une dépense à la poche qui l'a réglée.
+ *
+ * Sert d'abord à renseigner l'historique : les dépenses antérieures à cette
+ * colonne sont portées par le coffre faute de savoir, et celles qui étaient en
+ * fait des Wave l'ont creusé à tort. C'est ici qu'on les remet à leur place.
+ *
+ * Une dépense sortie d'un tiroir de caissier n'est pas concernée : un tiroir ne
+ * contient que des espèces, et la dire Wave contredirait le versement du soir,
+ * déjà compté sur ce que le tiroir avait en moins.
+ */
+export async function setExpenseMethod(id: string, method: "CASH" | "WAVE") {
+  const session = await auth();
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
+    throw new Error("Non autorisé");
+  }
+
+  const depense = await prisma.expense.findUnique({
+    where: { id },
+    select: { cashRegisterId: true },
+  });
+  if (!depense) return refus("Cette dépense n'existe plus.");
+  if (depense.cashRegisterId) {
+    return refus(
+      "Cette dépense a été réglée depuis le tiroir d'un caissier : elle est en espèces par nature."
+    );
+  }
+
+  await prisma.expense.update({ where: { id }, data: { method } });
+  revalider();
 }
 
 export async function deleteExpense(id: string) {
@@ -111,6 +158,5 @@ export async function deleteExpense(id: string) {
   }
 
   await prisma.expense.delete({ where: { id } });
-  revalidatePath("/depenses");
-  revalidatePath("/dashboard");
+  revalider();
 }

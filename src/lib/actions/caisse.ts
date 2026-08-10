@@ -220,6 +220,9 @@ export async function enregistrerDepenseCaisse(input: z.infer<typeof depenseCais
       date: new Date(),
       userId: session.user.id,
       cashRegisterId: cashRegister.id,
+      // Un tiroir ne contient que des espèces : le mode ne se demande pas au
+      // caissier, il découle de l'endroit d'où sort l'argent.
+      method: "CASH",
     },
   });
 

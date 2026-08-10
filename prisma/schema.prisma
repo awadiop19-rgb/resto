@@ -241,6 +241,17 @@ model Expense {
   cashRegisterId String?
   cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id])
 
+  // Avec quoi la maison a réglé la dépense. Sans cette colonne, le calcul du
+  // coffre supposait que toute dépense hors tiroir sortait des espèces : une
+  // dépense payée en Wave vidait donc un coffre qu'elle n'avait jamais touché,
+  // pendant que le compte Wave gardait un argent déjà sorti.
+  //
+  // Nul pour les dépenses saisies avant que la question ne soit posée. Ce n'est
+  // pas « espèces » : c'est « on ne sait pas ». Le calcul les traite comme des
+  // espèces, faute de mieux, et l'écran dit que c'en est l'hypothèse — mettre
+  // CASH par défaut ferait passer cette hypothèse pour une réponse.
+  method PaymentMethod?
+
   @@index([cashRegisterId])
 }
 

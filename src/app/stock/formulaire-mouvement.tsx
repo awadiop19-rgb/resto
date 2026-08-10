@@ -11,6 +11,8 @@ import type { StockMovementType } from "@/generated/prisma/client";
 
 const CHAMP = "rounded-md border border-slate-300 px-3 py-1.5 text-sm";
 
+type ModeReglement = "CASH" | "WAVE";
+
 const AIDE: Record<StockMovementType, string> = {
   ACHAT:
     "L'achat entre en stock et crée automatiquement la dépense correspondante : ne la ressaisissez pas dans Dépenses.",
@@ -30,6 +32,7 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
   const [quantity, setQuantity] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [sensNegatif, setSensNegatif] = useState(false);
+  const [method, setMethod] = useState<ModeReglement>("CASH");
   const [supplier, setSupplier] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -76,6 +79,9 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
             quantity: Number(quantity),
             sensNegatif: typeRetenu === "AJUSTEMENT" ? sensNegatif : undefined,
             unitPrice: typeRetenu === "ACHAT" ? Number(unitPrice) : undefined,
+            // Seul l'achat engendre une dépense : les autres mouvements ne
+            // paient rien, et leur donner un mode n'aurait rien à désigner.
+            method: typeRetenu === "ACHAT" ? method : undefined,
             supplier: supplier || undefined,
             note: note || undefined,
             date,
@@ -214,6 +220,22 @@ export function FormulaireMouvement({ produits }: { produits: ProduitOption[] })
                 onChange={(e) => setSupplier(e.target.value)}
                 className={`${CHAMP} w-full`}
               />
+            </div>
+            {/* L'achat crée une dépense, et une dépense sort d'une poche. Sans
+                ce champ, le coffre la porterait qu'il l'ait payée ou non. */}
+            <div>
+              <label className="mb-1 block text-xs text-slate-500" htmlFor="mvt-mode">
+                Réglé en
+              </label>
+              <select
+                id="mvt-mode"
+                value={method}
+                onChange={(e) => setMethod(e.target.value as ModeReglement)}
+                className={`${CHAMP} w-full`}
+              >
+                <option value="CASH">Espèces (coffre)</option>
+                <option value="WAVE">Wave</option>
+              </select>
             </div>
             <div className="flex items-end">
               <p className="text-sm text-slate-500">
