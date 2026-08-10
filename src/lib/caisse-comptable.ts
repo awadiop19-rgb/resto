@@ -1,5 +1,6 @@
-import { format } from "date-fns";
+import { addDays, differenceInCalendarDays, format } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { JOURS_AVANT_PROJECTION } from "@/lib/mois-verdict";
 
 /**
  * Caisse tenue par la comptabilité : les espèces qui dorment dans le coffre.
@@ -186,6 +187,10 @@ export type TresorerieDuMois = NonNullable<Awaited<ReturnType<typeof getTresorer
  * remplir. Un mois peut donc vider le premier tout en gagnant de l'argent, si
  * ses recettes rentrent d'un côté et ses achats sortent de l'autre.
  *
+ * Les deux poches se projettent aussi jusqu'au dernier jour du mois : le coffre
+ * peut être à sec avant le 31 sans que le résultat ne s'en ressente, et c'est le
+ * genre de chose qui se corrige tant qu'il en reste le temps.
+ *
  * `null` tant qu'aucun comptage n'a précédé le début du mois : sans coffre
  * connu au départ, il n'y a rien à raconter.
  */
@@ -237,6 +242,51 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     }
   }
 
+  // --------------------------------------------- Où seront les poches au 31
+  //
+  // Le mois se lit aussi vers l'avant. Un coffre qui tient aujourd'hui peut être
+  // à sec avant le 31, et c'est le genre de chose qui se corrige tant qu'il en
+  // reste le temps — décaler un réapprovisionnement, ou rapatrier du Wave.
+  //
+  // Le rythme du coffre se prend sur la variation des mouvements, jamais sur
+  // l'entame. Les deux se ressemblent, mais l'entame compare le solde d'ouverture
+  // à un solde reconstruit depuis le dernier comptage : si la comptabilité a
+  // recompté en cours de mois, l'écart qu'elle a corrigé s'y est logé. Ce
+  // recalage est un événement unique ; l'extrapoler reviendrait à annoncer le
+  // même écart chaque jour jusqu'à la fin du mois.
+  const joursEcoules = differenceInCalendarDays(borne, debut) + 1;
+  const joursRestants = Math.max(0, differenceInCalendarDays(fin, borne));
+  const rythmeCoffre = mouvements.variation / joursEcoules;
+  const rythmeWave = wave.encaisse / joursEcoules;
+
+  /**
+   * Le jour où le coffre tomberait à zéro au rythme actuel, `null` s'il tient le
+   * mois. Un coffre qui se remplit n'a pas de rupture, et un coffre déjà vide ne
+   * l'annonce plus : il se constate, et `impossible` s'en charge.
+   */
+  function jourDeRupture() {
+    if (rythmeCoffre >= 0 || soldeActuel <= 0) return null;
+    const jours = soldeActuel / -rythmeCoffre;
+    if (jours > joursRestants) return null;
+    return addDays(borne, Math.ceil(jours));
+  }
+
+  // Bornée par le même seuil que la projection du résultat, et pour la même
+  // raison : les achats sont grumeleux. Un sac de riz acheté le 2 couvre trois
+  // semaines, mais une droite le rachète chaque jour — sur trois jours, elle
+  // annoncerait une rupture de coffre qui n'arrivera pas, et ferait couper des
+  // dépenses saines.
+  const projection =
+    joursEcoules >= JOURS_AVANT_PROJECTION
+      ? {
+          coffre: soldeActuel + rythmeCoffre * joursRestants,
+          wave: wave.solde + rythmeWave * joursRestants,
+          rythmeCoffre,
+          rythmeWave,
+          rupture: jourDeRupture(),
+        }
+      : null;
+
   const coffre = {
     /** Comptage sur lequel s'appuie le report, pour que le chiffre se vérifie. */
     comptage: ouverture.comptage,
@@ -261,6 +311,13 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     /** Les deux poches réunies : ce que le mois avait, et ce qu'il lui reste. */
     report: coffre.report + wave.report,
     solde: coffre.solde + wave.solde,
+    /**
+     * Où seront les deux poches au dernier jour du mois, au rythme constaté.
+     * `null` tant que le mois est trop jeune pour qu'une droite veuille dire
+     * quelque chose.
+     */
+    projection: projection && { ...projection, total: projection.coffre + projection.wave },
+    joursRestants,
   };
 }
 

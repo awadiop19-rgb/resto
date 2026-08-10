@@ -107,7 +107,7 @@ function JaugeTaux({
   );
 }
 
-/** Une poche de la trésorerie : trois chiffres, du départ à aujourd'hui. */
+/** Une poche de la trésorerie : son parcours, du départ au 31. */
 function Poche({
   titre,
   legende,
@@ -117,6 +117,8 @@ function Poche({
   mouvement,
   fin,
   alerte,
+  projete,
+  projeteLabel,
 }: {
   titre: string;
   legende: string;
@@ -126,6 +128,9 @@ function Poche({
   mouvement: number;
   fin: number;
   alerte?: boolean;
+  /** Où la poche finirait le mois au rythme actuel, `null` s'il est trop tôt. */
+  projete?: number | null;
+  projeteLabel: string;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 p-3">
@@ -151,6 +156,21 @@ function Poche({
             {formatFCFA(fin)}
           </dd>
         </div>
+        {/* La projection reste en retrait du constaté : c'est une droite tirée
+            d'un rythme, pas un montant que quelqu'un pourra compter. Lui donner
+            la même graisse qu'au solde du jour la ferait lire comme un fait. */}
+        {projete != null && (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-slate-400">{projeteLabel}</dt>
+            <dd
+              className={`text-sm font-medium tabular-nums ${
+                projete < 0 ? "text-[#d03b3b]" : "text-slate-500"
+              }`}
+            >
+              {formatFCFA(Math.round(projete))}
+            </dd>
+          </div>
+        )}
       </dl>
     </div>
   );
@@ -167,17 +187,25 @@ function Poche({
  * le coffre est la seule où le mois puise, le compte Wave ne fait que se
  * remplir. Les fondre en un total unique masquerait ce qui explique le mois —
  * un coffre qui se vide pendant qu'une part des recettes s'accumule ailleurs.
+ *
+ * La projection à fin de mois vit ici et non dans le bloc « Fin de mois », qui
+ * répond à une autre question : celui-là dit si le mois gagne de l'argent,
+ * celui-ci dit s'il en aura sous la main. Un mois peut très bien être rentable
+ * et manquer d'espèces le 20.
  */
 function BlocTresorerie({
   tresorerie,
   recettes,
   resultat,
+  joursDansLeMois,
 }: {
   tresorerie: TresorerieDuMois;
   recettes: number;
   resultat: number;
+  joursDansLeMois: number;
 }) {
-  const { coffre, wave } = tresorerie;
+  const { coffre, wave, projection } = tresorerie;
+  const projeteLabel = `Au ${joursDansLeMois}, au rythme actuel`;
   // Un coffre peut être regarni plutôt qu'entamé : un mois qui encaisse en
   // espèces plus qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a
   // trouvé.
@@ -208,6 +236,8 @@ function BlocTresorerie({
           mouvement={coffre.entame}
           fin={coffre.solde}
           alerte={coffre.impossible}
+          projete={projection?.coffre}
+          projeteLabel={projeteLabel}
         />
         <Poche
           titre="Compte Wave"
@@ -217,6 +247,8 @@ function BlocTresorerie({
           mouvementLabel="Encaissé ce mois-ci"
           mouvement={wave.encaisse}
           fin={wave.solde}
+          projete={projection?.wave}
+          projeteLabel={projeteLabel}
         />
       </div>
 
@@ -226,9 +258,27 @@ function BlocTresorerie({
           {formatFCFA(tresorerie.solde)}{" "}
           <span className="text-xs font-normal text-slate-400">
             contre {formatFCFA(tresorerie.report)} en début de mois
+            {projection && `, et ${formatFCFA(Math.round(projection.total))} au ${joursDansLeMois}`}
           </span>
         </span>
       </div>
+
+      {/* Le coffre est la seule poche qui puisse manquer : c'est de là que
+          sortent les achats. L'annoncer à date donne le temps de décaler un
+          réapprovisionnement — une fois le coffre vide, il n'y a plus de choix
+          à faire. */}
+      {projection?.rupture && (
+        <p className="mt-3 rounded-md border border-[#fab219] bg-[#fab219]/10 px-3 py-2 text-sm text-slate-700">
+          <span className="font-semibold">
+            Le coffre serait vide vers le {formatDate(projection.rupture)}
+          </span>
+          , avant la fin du mois : il se vide de{" "}
+          {formatFCFA(Math.round(-projection.rythmeCoffre))} par jour
+          {wave.encaisse > 0 && ", pendant que les recettes Wave s'accumulent hors de sa portée"}. Ce
+          n&apos;est pas une perte — le résultat du mois n&apos;en dit rien — mais les achats se
+          règlent en espèces, et il n&apos;y en aurait plus.
+        </p>
+      )}
 
       {/* Un coffre négatif ne se constate pas, il se signale : la maison n'est
           pas à sec, c'est le calcul qui a perdu le fil. */}
@@ -352,6 +402,7 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
           tresorerie={data.tresorerie}
           recettes={data.recettes}
           resultat={data.resultat}
+          joursDansLeMois={data.joursDansLeMois}
         />
       )}
 
