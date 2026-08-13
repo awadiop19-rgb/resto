@@ -41,6 +41,10 @@ const routeRoles: { prefix: string; roles: Role[] }[] = [
   { prefix: "/mes-livraisons", roles: ["ADMIN", "LIVREUR"] },
   // Le livreur n'a rien à faire dans la salle : il n'a que ses tournées.
   { prefix: "/commandes", roles: ["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"] },
+  // Les photos de la carte se tiennent depuis le comptoir : c'est là qu'on voit
+  // le plat sortir et qu'on l'entend décrire au client. La salle et la cuisine
+  // consultent la carte, elles ne la retouchent pas.
+  { prefix: "/menu/photos", roles: ["ADMIN", "CAISSIER"] },
   { prefix: "/menu", roles: ["ADMIN", "SERVEUR", "CUISINE", "CAISSIER"] },
 ];
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { premierMessage, refus } from "@/lib/actions/resultat";
+import { supprimerPhoto } from "@/lib/photos-menu-fichiers";
 import { CATEGORIES_PRODUIT } from "@/lib/stock";
 
 async function requireAdmin() {
@@ -51,7 +52,15 @@ export async function deleteMenuItem(id: string) {
     );
   }
 
+  const article = await prisma.menuItem.findUnique({
+    where: { id },
+    select: { imageUrl: true },
+  });
+
   await prisma.menuItem.delete({ where: { id } });
+  // Sa photo n'a plus personne pour la réclamer : elle resterait sur le volume
+  // sans que rien n'y mène jamais.
+  await supprimerPhoto(article?.imageUrl ?? null);
   revalidatePath("/menu");
 }
 

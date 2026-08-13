@@ -113,6 +113,15 @@ const TRACES: Record<NomIcone, React.ReactNode> = {
       <path d="M10 20v-4.5h4V20" />
     </>
   ),
+  // Une photographie encadree : `menu` est une assiette, et l'ecran des photos
+  // ne parle que d'images.
+  photos: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10" r="1.5" />
+      <path d="m4 17 4.5-4.5L12 16l3-2.5L20 18" />
+    </>
+  ),
   profil: (
     <>
       <circle cx="12" cy="9" r="3.5" />

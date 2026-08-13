@@ -6,6 +6,9 @@ primary_region = "cdg"
 [env]
   PORT = "3000"
   DATABASE_URL = "file:/data/dev.db"
+  # Les photos du menu vont sur le volume, avec la base : le reste du disque est
+  # remplacé à chaque déploiement.
+  PHOTOS_MENU_DIR = "/data/photos-menu"
   # Le découpage des journées et des mois comptables suit GMT, le fuseau de Dakar,
   # sans dépendre de la région où tourne la machine.
   TZ = "UTC"

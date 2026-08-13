@@ -52,6 +52,9 @@ next-env.d.ts
 prisma/*.db
 prisma/*.db-journal
 
+# photos du menu envoyées depuis l'application (données, pas source)
+/photos-menu/
+
 # build/log artifacts
 build-output.txt
 build-run.log

@@ -30,6 +30,7 @@ export type NomIcone =
   | "coffre"
   | "utilisateurs"
   | "horaires"
+  | "photos"
   | "profil";
 
 export type LienNav = { href: string; label: string; icone: NomIcone };
@@ -51,6 +52,7 @@ export const NAVIGATION: Record<string, Navigation> = {
           { href: "/commandes", label: "Commandes", icone: "commandes" },
           { href: "/livraisons", label: "Livraisons", icone: "livraisons" },
           { href: "/menu", label: "Menu", icone: "menu" },
+          { href: "/menu/photos", label: "Photos du menu", icone: "photos" },
         ],
       },
       {
@@ -137,6 +139,7 @@ export const NAVIGATION: Record<string, Navigation> = {
           { href: "/caisse", label: "Caisse", icone: "caisse" },
           { href: "/commandes", label: "Commandes", icone: "commandes" },
           { href: "/livraisons", label: "Livraisons", icone: "livraisons" },
+          { href: "/menu/photos", label: "Photos du menu", icone: "photos" },
         ],
       },
       { titre: "Compte", liens: [PROFIL] },

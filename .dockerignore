@@ -11,6 +11,7 @@ npm-debug.log*
 .env.*
 !.env.example
 dev.db
+photos-menu
 build-output.txt
 build-run.log
 README.md
