@@ -2,6 +2,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { debutJourneeExploitation } from "@/lib/journee-caisse";
+import { pocheDuRemboursement, type PocheRemboursement } from "@/lib/remboursement";
 import { totalCommande } from "@/lib/total-commande";
 
 /**
@@ -19,6 +20,7 @@ import { totalCommande } from "@/lib/total-commande";
 /** Un encaissement, tel qu'il apparaît dans le détail d'une caisse. */
 export type EncaissementLigne = {
   id: string;
+  orderId: string;
   paidAt: Date;
   method: "CASH" | "WAVE";
   amount: number;
@@ -26,6 +28,16 @@ export type EncaissementLigne = {
   tableNumber: number | null;
   customerName: string | null;
   type: "SUR_PLACE" | "A_EMPORTER" | "LIVRAISON";
+  /** Poche qui rendrait l'argent si la comptabilité annulait l'encaissement. */
+  poche: PocheRemboursement;
+  /** Renseignée si la comptabilité a défait cet encaissement. */
+  annulation: {
+    motif: string | null;
+    auteur: string | null;
+    date: Date;
+    /** Faux : la commande est annulée mais la maison a gardé l'argent. */
+    rembourse: boolean;
+  } | null;
   /** Renseignée si la comptabilité a rectifié le mode saisi par le caissier. */
   correction: {
     modeOrigine: "CASH" | "WAVE";
@@ -155,6 +167,12 @@ export async function getJourneeComptable() {
                   tableNumber: true,
                   customerName: true,
                   type: true,
+                  // Un encaissement annulé reste affiché : c'est la seule façon
+                  // de retrouver, en relisant la journée, ce qui a été défait.
+                  cancelledAt: true,
+                  cancellationReason: true,
+                  cancelledBy: { select: { name: true } },
+                  refund: { select: { id: true } },
                 },
               },
             },
@@ -246,6 +264,7 @@ export async function getJourneeComptable() {
         note: caisse.note,
         encaissements: caisse.payments.map((p) => ({
           id: p.id,
+          orderId: p.orderId,
           paidAt: p.createdAt,
           method: p.method,
           amount: p.amount,
@@ -253,6 +272,18 @@ export async function getJourneeComptable() {
           tableNumber: p.order.tableNumber,
           customerName: p.order.customerName,
           type: p.order.type,
+          // Ou serait pris l'argent si la comptabilité annulait cet encaissement
+          // maintenant. Dépend de l'état de la caisse : une fois versée, ce
+          // n'est plus le tiroir qui détient les espèces.
+          poche: pocheDuRemboursement(p.method, ouverte),
+          annulation: p.order.cancelledAt
+            ? {
+                motif: p.order.cancellationReason,
+                auteur: p.order.cancelledBy?.name ?? null,
+                date: p.order.cancelledAt,
+                rembourse: p.order.refund != null,
+              }
+            : null,
           // `methodCorrectedAt` porte la correction : `originalMethod` seul ne
           // dirait pas si elle a eu lieu quand le mode d'origine est réécrit.
           correction:

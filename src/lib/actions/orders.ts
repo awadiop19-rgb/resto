@@ -8,6 +8,8 @@ import type { OrderStatus, Role } from "@/generated/prisma/client";
 import { blocageCaisse } from "@/lib/journee-caisse";
 import { blocageCommandeEnLigne } from "@/lib/horaires-data";
 import { premierMessage, refus } from "@/lib/actions/resultat";
+import { libelleCourtCommande } from "@/lib/libelles-commande";
+import { CATEGORIE_REMBOURSEMENT, pocheDuRemboursement } from "@/lib/remboursement";
 import { genererReference } from "@/lib/reference-commande";
 import { tarifDuQuartier } from "@/lib/zones-livraison";
 import {
@@ -361,6 +363,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
       createdAt: true,
       userId: true,
       items: { select: { menuItemId: true, quantity: true } },
+      refund: { select: { id: true } },
     },
   });
   if (!commande) return refus("Commande introuvable");
@@ -370,6 +373,12 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   // stock ne bouge ferait apparaître des boissons qui sont chez le client.
   const annule = status === "ANNULEE";
   const retabli = commande.status === "ANNULEE" && !annule;
+
+  // Une commande remboursee ne se rouvre pas : son argent est deja ressorti, et
+  // la remettre en service la ferait servir une seconde fois sans contrepartie.
+  if (retabli && commande.refund) {
+    return refus("Cette commande a été remboursée : elle ne peut pas être rouverte.");
+  }
 
   const sorties = retabli ? await sortiesDeVente(commande.items) : [];
   if ("erreur" in sorties) return sorties;
@@ -450,6 +459,115 @@ export async function annulerCommandeImpayee(input: z.infer<typeof annulationSch
   revalidatePath("/dashboard");
   revalidatePath("/stock");
   return { ok: true as const };
+}
+
+const annulationEncaisseeSchema = z.object({
+  orderId: z.string().min(1),
+  // Plus exigeant que pour une commande impayee : ici de l'argent bouge, et ce
+  // motif est la seule piece qui expliquera, des semaines plus tard, pourquoi
+  // une recette encaissee est ressortie.
+  motif: z
+    .string()
+    .trim()
+    .min(10, "Expliquez l'annulation en une phrase : c'est tout ce qui en restera")
+    .max(300),
+  /**
+   * Le client a-t-il recupere son argent ? Aucune valeur par defaut : un defaut
+   * deciderait a la place du comptable de ce que devient la recette, et les deux
+   * cas arrivent — un doublon se rembourse, un plat deja consomme se garde.
+   */
+  rembourse: z.boolean({ message: "Dites si le client a été remboursé" }),
+});
+
+/**
+ * Annulation par la comptabilite d'une commande deja encaissee.
+ *
+ * Le comptoir ne peut pas le faire : encaisser puis defaire est une correction
+ * de recette, pas un geste de service. La comptabilite le voit d'ailleurs plus
+ * tard, en relisant la journee — un encaissement en double, une commande soldee
+ * a la place d'une autre, un client rembourse.
+ *
+ * Le paiement reste. Sa recette a ete comptee le jour ou elle a eu lieu, puis
+ * versee et verifiee ; l'effacer creuserait dans ce versement clos un ecart que
+ * personne ne pourrait expliquer. L'argent rendu ressort donc au jour ou il est
+ * rendu, comme une depense — et de la poche qui le detient, voir
+ * `@/lib/remboursement`.
+ *
+ * Le stock ne revient que si le client a ete rembourse. Une commande gardee
+ * l'est parce qu'elle a ete consommee : rendre ses boissons au stock ferait
+ * reapparaitre des bouteilles qui sont chez le client.
+ */
+export async function annulerCommandeEncaissee(
+  input: z.infer<typeof annulationEncaisseeSchema>
+) {
+  const session = await requireRole(["ADMIN", "COMPTABILITE"]);
+
+  const parsed = annulationEncaisseeSchema.safeParse(input);
+  if (!parsed.success) return refus(premierMessage(parsed.error));
+  const { orderId, motif, rembourse } = parsed.data;
+
+  const commande = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      payment: { include: { cashRegister: { select: { status: true } } } },
+      refund: { select: { id: true } },
+    },
+  });
+  if (!commande) return refus("Commande introuvable");
+  if (!commande.payment) {
+    return refus("Cette commande n'a jamais été encaissée : annulez-la comme une impayée.");
+  }
+  if (commande.status === "ANNULEE") return refus("Cette commande est déjà annulée");
+
+  const paiement = commande.payment;
+  const poche = pocheDuRemboursement(
+    paiement.method,
+    paiement.cashRegister.status === "OUVERTE"
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: "ANNULEE",
+        cancelledAt: new Date(),
+        cancellationReason: motif,
+        cancelledById: session.user.id,
+      },
+    });
+
+    if (rembourse) {
+      await tx.expense.create({
+        data: {
+          label: `Remboursement ${libelleCourtCommande(commande)}`,
+          amount: paiement.amount,
+          category: CATEGORIE_REMBOURSEMENT,
+          // Aujourd'hui, jamais le jour de l'encaissement : c'est aujourd'hui
+          // que l'argent quitte la maison.
+          date: new Date(),
+          method: paiement.method,
+          // Rattachee au tiroir tant qu'il detient les especes : la clôture
+          // les attendrait sinon, et le caissier passerait pour manquant.
+          cashRegisterId: poche === "TIROIR" ? paiement.cashRegisterId : null,
+          userId: session.user.id,
+          refundedOrderId: orderId,
+        },
+      });
+      await annulerSortiesDeVente(tx, orderId);
+    }
+  });
+
+  revalidatePath("/comptabilite/journee");
+  revalidatePath("/comptabilite");
+  revalidatePath("/comptabilite/caisse");
+  revalidatePath("/comptabilite/mois");
+  revalidatePath("/depenses");
+  revalidatePath("/caisse");
+  revalidatePath("/caisse/versements");
+  revalidatePath("/commandes");
+  revalidatePath("/dashboard");
+  if (rembourse) revalidatePath("/stock");
+  return { ok: true as const, rembourse, poche };
 }
 
 export async function deleteOrder(orderId: string) {

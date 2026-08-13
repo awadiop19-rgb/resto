@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { AnnulerEncaissement } from "@/components/annuler-encaissement";
 import { StatTile } from "@/components/stat-tile";
 import { corrigerModePaiement } from "@/lib/actions/caisse";
 import { annulerCommandeImpayee } from "@/lib/actions/orders";
 import { assurerSucces } from "@/lib/actions/resultat";
 import { downloadCsv } from "@/lib/csv";
 import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
-import { TYPE_CLASSES, TYPE_LABELS } from "@/lib/libelles-commande";
+import { TYPE_CLASSES, TYPE_LABELS, libelleCourtCommande } from "@/lib/libelles-commande";
 import type {
   CaisseJournee,
   CaissierJournee,
@@ -185,16 +186,11 @@ function AnnulerCommande({ commande }: { commande: CommandeAEncaisser }) {
   );
 }
 
-/** Comment désigner une commande en une colonne : ce que le caissier reconnaît. */
-function libelleCommande(commande: {
-  reference: string | null;
-  tableNumber: number | null;
-  customerName: string | null;
-}) {
-  if (commande.reference) return commande.reference;
-  if (commande.tableNumber != null) return `Table ${commande.tableNumber}`;
-  return commande.customerName ?? "Commande";
-}
+/**
+ * Le même libellé que celui porté par le remboursement d'une commande annulée :
+ * les deux doivent se reconnaître l'un l'autre dans la liste des dépenses.
+ */
+const libelleCommande = libelleCourtCommande;
 
 function Badge({ tone, children }: { tone: "ouverte" | "retard" | "fermee"; children: React.ReactNode }) {
   const classes = {
@@ -331,7 +327,20 @@ function Caisse({ caisse }: { caisse: CaisseJournee }) {
                 {caisse.encaissements.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100">
                     <td className="whitespace-nowrap py-1.5 pr-3 text-slate-500">{formatHeure(e.paidAt)}</td>
-                    <td className="py-1.5 pr-3 font-medium">{libelleCommande(e)}</td>
+                    <td className="py-1.5 pr-3">
+                      {/* Barrée plutôt que retirée : l'encaissement a bien eu
+                          lieu, et la journée doit continuer de le montrer. */}
+                      <span className={`font-medium ${e.annulation ? "line-through text-slate-400" : ""}`}>
+                        {libelleCommande(e)}
+                      </span>
+                      <AnnulerEncaissement
+                        orderId={e.orderId}
+                        libelle={libelleCommande(e)}
+                        montant={e.amount}
+                        poche={e.poche}
+                        annulation={e.annulation}
+                      />
+                    </td>
                     <td className="py-1.5 pr-3">
                       <span className={`rounded px-1.5 py-0.5 text-xs ${TYPE_CLASSES[e.type]}`}>
                         {TYPE_LABELS[e.type]}

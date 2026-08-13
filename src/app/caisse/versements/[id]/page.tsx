@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AnnulerEncaissement } from "@/components/annuler-encaissement";
 import { PageContainer } from "@/components/page-container";
 import { prisma } from "@/lib/prisma";
 import { CHART } from "@/lib/chart-theme";
 import { formatDateHeure, formatFCFA, formatHeure, formatSignedFCFA } from "@/lib/format";
+import { libelleCourtCommande } from "@/lib/libelles-commande";
+import { pocheDuRemboursement } from "@/lib/remboursement";
 import { ExportVersementButton, type LigneEncaissement } from "./export-button";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +43,16 @@ export default async function VersementDetailPage({ params }: { params: Promise<
       correctedBy: { select: { name: true } },
       payments: {
         include: {
-          order: { include: { items: { include: { menuItem: true } } } },
+          order: {
+            include: {
+              items: { include: { menuItem: true } },
+              // Une commande défaite après coup reste dans le versement : il a
+              // bien reçu cet argent ce soir-là. C'est le remboursement, daté du
+              // jour où il est rendu, qui le fait ressortir.
+              cancelledBy: { select: { name: true } },
+              refund: { select: { id: true } },
+            },
+          },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -69,9 +81,7 @@ export default async function VersementDetailPage({ params }: { params: Promise<
 
   const lignes: LigneEncaissement[] = versement.payments.map((p) => ({
     heure: formatDateHeure(p.createdAt),
-    commande: p.order.tableNumber
-      ? `Table ${p.order.tableNumber}`
-      : (p.order.customerName ?? "Commande en ligne"),
+    commande: libelleCourtCommande(p.order),
     articles: p.order.items.map((i) => `${i.quantity}x ${i.menuItem.name}`).join(", "),
     mode: p.method === "CASH" ? "Espèces" : "Wave",
     montant: p.amount,
@@ -269,10 +279,30 @@ export default async function VersementDetailPage({ params }: { params: Promise<
                     <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
                       {formatHeure(p.createdAt)}
                     </td>
-                    <td className="py-2 pr-3 font-medium">
-                      {p.order.tableNumber
-                        ? `Table ${p.order.tableNumber}`
-                        : (p.order.customerName ?? "Commande en ligne")}
+                    <td className="py-2 pr-3">
+                      <span
+                        className={`font-medium ${
+                          p.order.cancelledAt ? "text-slate-400 line-through" : ""
+                        }`}
+                      >
+                        {libelleCourtCommande(p.order)}
+                      </span>
+                      <AnnulerEncaissement
+                        orderId={p.orderId}
+                        libelle={libelleCourtCommande(p.order)}
+                        montant={p.amount}
+                        poche={pocheDuRemboursement(p.method, versement.status === "OUVERTE")}
+                        annulation={
+                          p.order.cancelledAt
+                            ? {
+                                motif: p.order.cancellationReason,
+                                auteur: p.order.cancelledBy?.name ?? null,
+                                date: p.order.cancelledAt,
+                                rembourse: p.order.refund != null,
+                              }
+                            : null
+                        }
+                      />
                     </td>
                     <td className="py-2 pr-3 text-slate-600">
                       {p.order.items.map((i) => `${i.quantity}× ${i.menuItem.name}`).join(", ")}

@@ -77,6 +77,21 @@ export function etapesSuivi(
   return etapes.map((etape, index) => ({ ...etape, faite: index <= atteinte }));
 }
 
+/**
+ * Comment désigner une commande en une colonne, ou dans le libellé d'une
+ * dépense : ce que celui qui la relira reconnaîtra. La référence d'abord, parce
+ * que c'est elle que le client donne au comptoir.
+ */
+export function libelleCourtCommande(commande: {
+  reference: string | null;
+  tableNumber: number | null;
+  customerName: string | null;
+}) {
+  if (commande.reference) return commande.reference;
+  if (commande.tableNumber != null) return `Table ${commande.tableNumber}`;
+  return commande.customerName ?? "Commande";
+}
+
 /** Masque un numéro pour l'affichage public : 77 123 45 67 -> 77 ••• •• 67 */
 export function masquerTelephone(numero: string | null) {
   if (!numero) return null;

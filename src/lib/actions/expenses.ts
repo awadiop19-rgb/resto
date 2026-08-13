@@ -117,9 +117,17 @@ export async function setExpenseMethod(id: string, method: "CASH" | "WAVE") {
 
   const depense = await prisma.expense.findUnique({
     where: { id },
-    select: { cashRegisterId: true },
+    select: { cashRegisterId: true, refundedOrderId: true },
   });
   if (!depense) return refus("Cette dépense n'existe plus.");
+  // Un remboursement rend l'argent par où il est entré. Le dire réglé autrement
+  // ferait sortir d'une poche ce qu'une autre a encaissé, et les deux seraient
+  // fausses en sens inverse.
+  if (depense.refundedOrderId) {
+    return refus(
+      "Ce remboursement suit le mode de l'encaissement qu'il défait : il ne se change pas."
+    );
+  }
   if (depense.cashRegisterId) {
     return refus(
       "Cette dépense a été réglée depuis le tiroir d'un caissier : elle est en espèces par nature."
@@ -134,6 +142,18 @@ export async function deleteExpense(id: string) {
   const session = await auth();
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "COMPTABILITE")) {
     throw new Error("Non autorisé");
+  }
+
+  // Un remboursement appartient à la commande qu'il défait : le supprimer
+  // laisserait une commande annulée dont l'argent serait rendu nulle part, et la
+  // trace de ce qui est sorti disparaîtrait avec la seule pièce qui l'expliquait.
+  const remboursement = await prisma.expense.findFirst({
+    where: { id, refundedOrderId: { not: null } },
+  });
+  if (remboursement) {
+    return refus(
+      "Cette dépense est le remboursement d'une commande annulée : elle ne se supprime pas à part."
+    );
   }
 
   // Une dépense née d'un achat de stock appartient à son mouvement : la

@@ -192,15 +192,22 @@ model Order {
   assignedAt      DateTime?
   deliveredAt     DateTime?
 
-  // Annulation par la comptabilité d'une commande en ligne jamais encaissée —
-  // client injoignable, canular, doublon. La commande quitte alors la liste des
-  // encaissements en attente, mais n'est pas détruite : le motif doit rester
-  // attaché à ce qu'il justifie, sans quoi plus personne ne peut vérifier après
-  // coup ce qui a disparu de la journée, ni constater une annulation à tort.
+  // Annulation par la comptabilité — commande jamais encaissée dont le client
+  // est injoignable, canular, doublon ; ou commande déjà encaissée qu'il faut
+  // défaire. La commande quitte alors la liste des encaissements en attente,
+  // mais n'est pas détruite : le motif doit rester attaché à ce qu'il justifie,
+  // sans quoi plus personne ne peut vérifier après coup ce qui a disparu de la
+  // journée, ni constater une annulation à tort.
   cancelledAt        DateTime?
   cancellationReason String?
   cancelledById      String?
   cancelledBy        User?     @relation("OrderCanceller", fields: [cancelledById], references: [id])
+
+  // Remboursement rendu au client quand l'annulation portait sur une commande
+  // déjà encaissée. Son absence sur une commande annulée dit que la maison a
+  // gardé l'argent — les deux arrivent, et rien ne permettrait de les
+  // distinguer si le remboursement n'était qu'une dépense parmi d'autres.
+  refund Expense? @relation("OrderRefund")
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -233,6 +240,15 @@ model Expense {
   // Renseigné quand la dépense a été engendrée par un achat de stock. Elle est
   // alors pilotée par le mouvement : on ne la saisit ni ne la supprime à part.
   stockMovement StockMovement?
+
+  // Renseigné quand la dépense rend au client l'argent d'une commande annulée
+  // après encaissement. Le paiement d'origine, lui, n'est jamais effacé : la
+  // recette du jour où il a eu lieu a déjà été comptée, versée et vérifiée, et
+  // la réécrire creuserait dans un versement clos un écart que plus personne ne
+  // pourrait expliquer. L'argent ressort donc au jour où il est rendu, comme
+  // toute sortie de caisse.
+  refundedOrderId String? @unique
+  refundedOrder   Order?  @relation("OrderRefund", fields: [refundedOrderId], references: [id])
 
   // Renseigné quand un caissier a réglé la dépense en espèces depuis son tiroir.
   // Ce lien n'est pas décoratif : il retire la somme des espèces attendues à la
