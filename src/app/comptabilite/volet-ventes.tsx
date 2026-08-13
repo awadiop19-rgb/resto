@@ -23,6 +23,7 @@ const TOP_PLATS = 10;
 export function VoletVentes({ data }: { data: ComptabiliteData }) {
   const {
     chiffreAffaires,
+    totalRembourse,
     ventesEspeces,
     ventesWave,
     commandesEncaissees,
@@ -50,7 +51,11 @@ export function VoletVentes({ data }: { data: ComptabiliteData }) {
         <StatTile
           label="Chiffre d'affaires encaissé"
           value={formatFCFA(chiffreAffaires)}
-          hint="Somme des paiements enregistrés"
+          hint={
+            totalRembourse > 0
+              ? `Somme des paiements enregistrés · ${formatFCFA(totalRembourse)} rendus au client, comptés en dépenses`
+              : "Somme des paiements enregistrés"
+          }
         />
         <StatTile label="Commandes encaissées" value={commandesEncaissees.toLocaleString("fr-FR")} />
         <StatTile label="Ticket moyen" value={formatFCFA(Math.round(ticketMoyen))} />

@@ -407,12 +407,13 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
     caissiers,
     commandesAEncaisser,
     commandesAnnulees,
-    totalAnnule,
     totalAEncaisser,
     nombreWaveAVerifier,
     montantWaveAVerifier,
     impayeesAnterieures,
     totalEncaisse,
+    totalEncaisseNet,
+    totalRembourse,
     nombreEncaissements,
     dejaVerse,
     especesEnAttente,
@@ -421,6 +422,16 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
     nombreCaissesOuvertes,
     caissesEnRetard,
   } = data;
+
+  // Une annulation ne retire pas toujours de l'argent, et pas toujours le même :
+  // une impayée quitte l'attente d'encaissement, une remboursée sort d'une
+  // poche, une gardée ne bouge rien. Les additionner ne dirait rien de vrai.
+  const totalAnnuleImpaye = commandesAnnulees
+    .filter((c) => !c.encaissee)
+    .reduce((s, c) => s + c.montant, 0);
+  const totalAnnuleGarde = commandesAnnulees
+    .filter((c) => c.encaissee && !c.rembourse)
+    .reduce((s, c) => s + c.montant, 0);
 
   function exportCsv() {
     const rows: (string | number)[][] = [
@@ -461,10 +472,18 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Ce qu'il reste de la journée, remboursements déduits. Le brut seul
+            annoncerait un argent que la maison a déjà rendu — et un
+            remboursement peut défaire l'encaissement d'un jour précédent : il
+            n'en est pas moins sorti aujourd'hui. */}
         <StatTile
-          label="Encaissé aujourd'hui"
-          value={formatFCFA(totalEncaisse)}
-          hint={`${nombreEncaissements} encaissement(s) du jour · ${caissiers.length} caissier(s) suivi(s)`}
+          label={totalRembourse > 0 ? "Encaissé net aujourd'hui" : "Encaissé aujourd'hui"}
+          value={formatFCFA(totalEncaisseNet)}
+          hint={
+            totalRembourse > 0
+              ? `${formatFCFA(totalEncaisse)} encaissés − ${formatFCFA(totalRembourse)} remboursés · ${nombreEncaissements} encaissement(s) du jour`
+              : `${nombreEncaissements} encaissement(s) du jour · ${caissiers.length} caissier(s) suivi(s)`
+          }
         />
         <StatTile
           label="Déjà versé"
@@ -615,9 +634,15 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-semibold">Commandes annulées aujourd&apos;hui</h2>
+            {/* Trois sorts distincts, qu'un montant global mélangerait : ce qui
+                n'avait jamais été payé n'est pas de l'argent rendu, et ce que la
+                maison garde n'a quitté aucune poche. */}
             <span className="text-xs text-slate-500">
-              {commandesAnnulees.length} commande(s) · {formatFCFA(totalAnnule)} retirés de
-              l&apos;attente d&apos;encaissement
+              {commandesAnnulees.length} commande(s)
+              {totalAnnuleImpaye > 0 &&
+                ` · ${formatFCFA(totalAnnuleImpaye)} retirés de l'attente d'encaissement`}
+              {totalRembourse > 0 && ` · ${formatFCFA(totalRembourse)} remboursés`}
+              {totalAnnuleGarde > 0 && ` · ${formatFCFA(totalAnnuleGarde)} gardés`}
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -637,10 +662,31 @@ export function JourneeCaissiers({ data }: { data: JourneeComptable }) {
                     <td className="whitespace-nowrap py-2 pr-3 text-slate-500">
                       {formatHeure(c.cancelledAt)}
                     </td>
-                    <td className="py-2 pr-3 font-medium">{libelleCommande(c)}</td>
+                    <td className="py-2 pr-3">
+                      <span className="font-medium">{libelleCommande(c)}</span>
+                      {c.encaissee && (
+                        <span
+                          className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                            c.rembourse
+                              ? "bg-red-100 text-red-700"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {c.rembourse ? "remboursée" : "argent gardé"}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2 pr-3 text-slate-600">{c.motif ?? "—"}</td>
                     <td className="py-2 pr-3 text-slate-500">{c.auteur ?? "—"}</td>
-                    <td className="py-2 text-right text-slate-500 line-through">
+                    {/* Barré quand la somme a quitté la journée. Un montant gardé
+                        ne l'est pas : il est resté en recette. */}
+                    <td
+                      className={`py-2 text-right ${
+                        c.encaissee && !c.rembourse
+                          ? "text-slate-600"
+                          : "text-slate-500 line-through"
+                      }`}
+                    >
                       {formatFCFA(c.montant)}
                     </td>
                   </tr>

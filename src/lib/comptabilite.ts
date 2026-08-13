@@ -278,6 +278,14 @@ export async function getComptabilite(periode: Periode) {
     caissesOuvertes: openRegistersCount,
     // Ventes
     chiffreAffaires,
+    // Argent rendu sur la période pour des commandes annulées après
+    // encaissement. Le chiffre d'affaires reste brut : le remboursement est déjà
+    // compté en dépense, et l'ôter aussi de la recette le retrancherait deux
+    // fois du résultat. Il est dit à côté, pour qu'un chiffre d'affaires ne
+    // paraisse pas entièrement gardé.
+    totalRembourse: expenses
+      .filter((e) => e.refundedOrderId != null)
+      .reduce((s, e) => s + e.amount, 0),
     ventesEspeces,
     ventesWave,
     commandesEncaissees: payments.length,

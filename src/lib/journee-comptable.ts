@@ -2,6 +2,7 @@ import { differenceInCalendarDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { debutJourneeExploitation } from "@/lib/journee-caisse";
+import { libelleCourtCommande } from "@/lib/libelles-commande";
 import { pocheDuRemboursement, type PocheRemboursement } from "@/lib/remboursement";
 import { totalCommande } from "@/lib/total-commande";
 
@@ -115,6 +116,11 @@ export type CommandeAnnulee = {
   motif: string | null;
   /** `null` si le compte a été supprimé depuis : le motif, lui, demeure. */
   auteur: string | null;
+  /** L'annulation portait sur une commande déjà payée par le client. */
+  encaissee: boolean;
+  /** Son argent lui a été rendu. Faux sur une commande encaissée : la maison
+   *  l'a gardé — un plat consommé ne se rembourse pas. */
+  rembourse: boolean;
 };
 
 export type CommandeAEncaisser = {
@@ -139,8 +145,14 @@ export async function getJourneeComptable() {
   const fin = new Date(debut);
   fin.setDate(fin.getDate() + 1);
 
-  const [caissesBrutes, impayees, nombreImpayeesAnterieures, plusAncienneImpayee, annulees] =
-    await Promise.all([
+  const [
+    caissesBrutes,
+    impayees,
+    nombreImpayeesAnterieures,
+    plusAncienneImpayee,
+    annulees,
+    remboursements,
+  ] = await Promise.all([
       // Trois familles de caisses concernent la journée. Un service qui déborde
       // sur le lendemain est fréquent : s'en tenir à la date d'ouverture ferait
       // disparaître de la vue un versement pourtant reçu aujourd'hui.
@@ -207,8 +219,22 @@ export async function getJourneeComptable() {
         include: {
           items: { select: { quantity: true, unitPrice: true } },
           cancelledBy: { select: { name: true } },
+          payment: { select: { id: true } },
+          refund: { select: { id: true } },
         },
         orderBy: { cancelledAt: "desc" },
+      }),
+      // L'argent rendu aujourd'hui, quel que soit le jour de l'encaissement
+      // qu'il défait. C'est une sortie du jour : sans elle, la journée
+      // annoncerait un encaissé que la maison n'a plus.
+      prisma.expense.findMany({
+        where: { refundedOrderId: { not: null }, date: { gte: debut, lt: fin } },
+        include: {
+          refundedOrder: {
+            select: { reference: true, tableNumber: true, customerName: true },
+          },
+        },
+        orderBy: { date: "desc" },
       }),
     ]);
 
@@ -368,7 +394,20 @@ export async function getJourneeComptable() {
     montant: totalCommande(commande.items, commande.deliveryFee),
     motif: commande.cancellationReason,
     auteur: commande.cancelledBy?.name ?? null,
+    encaissee: commande.payment != null,
+    rembourse: commande.refund != null,
   }));
+
+  const remboursementsDuJour = remboursements.map((r) => ({
+    id: r.id,
+    montant: r.amount,
+    method: r.method,
+    date: r.date,
+    libelle: r.refundedOrder ? libelleCourtCommande(r.refundedOrder) : r.label,
+    /** Pris dans un tiroir encore ouvert plutôt que dans le coffre. */
+    surTiroir: r.cashRegisterId != null,
+  }));
+  const totalRembourse = remboursementsDuJour.reduce((s, r) => s + r.montant, 0);
 
   const totalAEncaisser = commandesAEncaisser.reduce((s, c) => s + c.montant, 0);
   const waveAVerifier = commandesAEncaisser.filter((c) => c.waveDeclaredAt != null);
@@ -401,6 +440,12 @@ export async function getJourneeComptable() {
     // montant reste en circulation, mais il n'est pas un flux d'aujourd'hui.
     totalEncaisse: caisses.reduce((s, c) => s + c.totalDuJour, 0),
     nombreEncaissements: caisses.reduce((s, c) => s + c.nombreDuJour, 0),
+    // Ce que la journée a rendu, et ce qu'il en reste. Un remboursement peut
+    // défaire l'encaissement d'un jour précédent : il n'en est pas moins sorti
+    // aujourd'hui, et c'est l'argent d'aujourd'hui qu'il diminue.
+    remboursements: remboursementsDuJour,
+    totalRembourse,
+    totalEncaisseNet: caisses.reduce((s, c) => s + c.totalDuJour, 0) - totalRembourse,
     // Recette déjà remise, fond de caisse déduit. Les sorties d'espèces sont
     // réintégrées : elles sont déjà comptées en dépenses, les retrancher ici
     // amputerait la recette une seconde fois.
