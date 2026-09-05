@@ -314,11 +314,15 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
   // Sans jour restant, il n'y a plus rien à prolonger : le dernier jour du mois,
   // la « projection au 31 » ne ferait que répéter le solde du jour en le donnant
   // pour une prévision.
+  //
+  // `coffre` et `wave` prolongent les mouvements du mois, jamais les soldes :
+  // c'est le mois seul que l'écran raconte, et une projection de solde y ferait
+  // réapparaître le report par la bande.
   const projection =
     joursRestants > 0 && joursEcoules >= JOURS_AVANT_PROJECTION
       ? {
-          coffre: soldeActuel + rythmeCoffre * joursRestants,
-          wave: wave.solde + rythmeWave * joursRestants,
+          coffre: mouvements.variation + rythmeCoffre * joursRestants,
+          wave: wave.encaisse - wave.depense + rythmeWave * joursRestants,
           rythmeCoffre,
           rythmeWave,
           rupture: jourDeRupture(),
@@ -332,6 +336,24 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     solde: soldeActuel,
     /** Ce que le mois a prélevé sur le report, négatif s'il l'a au contraire regarni. */
     entame: ouverture.solde - soldeActuel,
+
+    // Les seuls mouvements du mois, détaillés — ce sont eux que l'écran montre.
+    // Le report appartient au mois précédent : le mêler aux entrées du mois
+    // ferait porter à celui-ci un argent qu'il n'a pas gagné.
+    //
+    // `variation` ne vaut pas `-entame` dès qu'un comptage a recalé le coffre en
+    // cours de mois : l'écart corrigé se loge dans l'entame et non dans les
+    // mouvements. C'est la variation qui dit ce que le mois a fait ; l'entame dit
+    // seulement où le coffre en est arrivé.
+    /** Espèces remontées des caisses à la clôture, fonds de caisse compris. */
+    versements: mouvements.versementsRecus,
+    /** Fonds de caisse sortis vers les tiroirs — ils reviennent au versement du soir. */
+    fondsConfies: mouvements.fondsConfies,
+    /** Achats du mois réglés en espèces prises au coffre. */
+    depenses: mouvements.depensesReglees,
+    /** Somme signée des trois lignes ci-dessus : ce que le mois a ajouté au coffre. */
+    variation: mouvements.variation,
+
     creux,
     /**
      * Un coffre ne peut pas contenir moins que rien. S'il y descend, ce n'est
@@ -361,10 +383,12 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     /** Les deux poches réunies : ce que le mois avait, et ce qu'il lui reste. */
     report: coffre.report + wave.report,
     solde: coffre.solde + wave.solde,
+    /** Ce que les mouvements du mois ont ajouté aux deux poches, toutes causes réunies. */
+    variation: coffre.variation + wave.encaisse - wave.depense,
     /**
-     * Où seront les deux poches au dernier jour du mois, au rythme constaté.
-     * `null` tant que le mois est trop jeune pour qu'une droite veuille dire
-     * quelque chose.
+     * Ce que les mouvements du mois auront ajouté à chaque poche au dernier
+     * jour, au rythme constaté — jamais un solde. `null` tant que le mois est
+     * trop jeune pour qu'une droite veuille dire quelque chose.
      */
     projection: projection && { ...projection, total: projection.coffre + projection.wave },
     joursRestants,

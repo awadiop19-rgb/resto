@@ -17,7 +17,7 @@ import { StatTile } from "@/components/stat-tile";
 import { AXIS_TICK, CHART, CHART_MARK, TOOLTIP_STYLE } from "@/lib/chart-theme";
 import Link from "next/link";
 import { downloadCsv } from "@/lib/csv";
-import { formatDate, formatFCFA } from "@/lib/format";
+import { formatDate, formatFCFA, formatSignedFCFA } from "@/lib/format";
 import type { TresorerieDuMois } from "@/lib/caisse-comptable";
 // `import type` obligatoire ici : le module de calcul importe Prisma, qui n'a
 // rien à faire dans un bundle navigateur. Seuls les types en sont tirés.
@@ -84,33 +84,35 @@ function JaugeTaux({
 }
 
 /**
- * Une poche de la trésorerie : ce que le mois y a fait, et où elle en est.
+ * Une poche de la trésorerie : ce que le mois y a fait entrer et sortir.
  *
- * Le solde d'ouverture n'y figure pas : il appartient au mois précédent, et le
- * lire ici revenait à faire porter au mois en cours un chiffre qu'il n'a pas
- * gagné. Ne restent que les mouvements du mois et le solde du jour.
+ * Le solde d'ouverture n'y figure pas, et le solde du jour non plus : tous deux
+ * contiennent le report du mois précédent, un argent que le mois en cours n'a
+ * pas gagné. Ne restent que ses propres mouvements — et comme ils portent tous
+ * leur signe, la ligne du bas se recompose à l'œil, ce qu'un solde héritier d'un
+ * report ne permettait pas.
  *
- * Les mouvements sont une liste et non un chiffre unique : le coffre n'a qu'un
- * solde net à raconter, mais le Wave se remplit d'un côté et se vide de l'autre,
- * et les fondre en un net masquerait l'ampleur des deux.
+ * Les mouvements sont une liste et non un chiffre unique : un net masquerait
+ * l'ampleur des deux sens, et c'est justement le détail qui rend le total
+ * vérifiable.
  */
 function Poche({
   titre,
   legende,
   couleur,
   mouvements,
-  fin,
-  alerte,
+  net,
   projete,
   projeteLabel,
 }: {
   titre: string;
   legende: string;
   couleur: string;
+  /** Signés : positif fait entrer, négatif fait sortir. Leur somme donne `net`. */
   mouvements: { label: string; montant: number }[];
-  fin: number;
-  alerte?: boolean;
-  /** Où la poche finirait le mois au rythme actuel, `null` s'il est trop tôt. */
+  /** Ce que les mouvements ci-dessus ont ajouté à la poche depuis le 1er. */
+  net: number;
+  /** Où le mois porterait cette poche au 31, au rythme actuel ; `null` s'il est trop tôt. */
   projete?: number | null;
   projeteLabel: string;
 }) {
@@ -125,29 +127,29 @@ function Poche({
         {mouvements.map((m) => (
           <div key={m.label} className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-400">{m.label}</dt>
-            <dd className="text-sm font-medium tabular-nums">{formatFCFA(Math.abs(m.montant))}</dd>
+            {/* Le signe est porté par le chiffre et non par le libellé : c'est
+                lui qui fait que l'addition se suit du regard. */}
+            <dd className="text-sm font-medium tabular-nums">
+              {formatSignedFCFA(m.montant)}
+            </dd>
           </div>
         ))}
         <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-1.5">
-          <dt className="text-xs font-medium text-slate-600">Aujourd&apos;hui</dt>
-          <dd
-            className={`text-lg font-semibold tabular-nums ${alerte ? "text-[#d03b3b]" : ""}`}
-          >
-            {formatFCFA(fin)}
-          </dd>
+          <dt className="text-xs font-medium text-slate-600">Ce mois-ci</dt>
+          <dd className="text-lg font-semibold tabular-nums">{formatSignedFCFA(net)}</dd>
         </div>
         {/* La projection reste en retrait du constaté : c'est une droite tirée
             d'un rythme, pas un montant que quelqu'un pourra compter. Lui donner
-            la même graisse qu'au solde du jour la ferait lire comme un fait. */}
+            la même graisse qu'au net du mois la ferait lire comme un fait.
+
+            Neutre même en négatif : une poche que le mois vide n'est pas une
+            alerte — le coffre se vide chaque mois pour payer les achats. Ce qui
+            en serait une, un coffre à sec avant le 31, se dit plus bas. */}
         {projete != null && (
           <div className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-400">{projeteLabel}</dt>
-            <dd
-              className={`text-sm font-medium tabular-nums ${
-                projete < 0 ? "text-[#d03b3b]" : "text-slate-500"
-              }`}
-            >
-              {formatFCFA(Math.round(projete))}
+            <dd className="text-sm font-medium tabular-nums text-slate-500">
+              {formatSignedFCFA(Math.round(projete))}
             </dd>
           </div>
         )}
@@ -157,7 +159,14 @@ function Poche({
 }
 
 /**
- * Avec quel argent le mois a réglé ses achats, et où sont passées ses recettes.
+ * Ce que le mois a fait entrer et sortir de chaque poche.
+ *
+ * Rien ici n'est un solde : ni ce que la maison avait au 1er, ni ce qu'elle a
+ * aujourd'hui. Les deux contiennent le report des mois précédents, et le mêler
+ * aux mouvements du mois donnait un total qui ne se recomposait pas — un lecteur
+ * qui additionne ce qu'il voit tombait sur autre chose que la ligne du bas, et
+ * concluait à une erreur de calcul. Le report reparaît à un seul endroit, sous
+ * l'alerte de coffre négatif, parce que c'est justement lui qu'elle met en cause.
  *
  * Sa place est sous le verdict, et non dans les tuiles : il ne corrige aucun
  * chiffre du mois, il dit d'où vient l'argent. Mis en tuile à côté des recettes,
@@ -192,8 +201,9 @@ function BlocTresorerie({
   const projeteLabel = `Au ${joursDansLeMois}, au rythme actuel`;
   // Un coffre peut être regarni plutôt qu'entamé : un mois qui encaisse en
   // espèces plus qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a
-  // trouvé.
-  const consomme = coffre.entame > 0;
+  // trouvé. Lu sur la variation et non sur l'entame, pour dire la même chose que
+  // les chiffres affichés — un recalage de comptage ne se loge que dans l'entame.
+  const consomme = coffre.variation < 0;
   const partWave = recettes > 0 ? (wave.encaisse / recettes) * 100 : 0;
 
   return (
@@ -205,9 +215,10 @@ function BlocTresorerie({
         </span>
       </div>
       <p className="mt-0.5 text-xs text-slate-400">
-        Ce que le mois a fait entrer et sortir, et l&apos;argent qu&apos;il y a aujourd&apos;hui sous
-        la main. Il tient en deux poches : les espèces du coffre, et le compte Wave. Chaque dépense
-        sort de l&apos;une ou de l&apos;autre, selon le règlement indiqué à la saisie.
+        Ce que le mois a fait entrer et sortir, poche par poche : les espèces du coffre d&apos;un
+        côté, le compte Wave de l&apos;autre. Chaque dépense sort de l&apos;une ou de l&apos;autre,
+        selon le règlement indiqué à la saisie. Ce que la maison avait en réserve au 1er n&apos;entre
+        pas dans ces chiffres — cet argent-là appartient aux mois précédents.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -216,10 +227,17 @@ function BlocTresorerie({
           legende="Espèces : versements du soir, achats réglés en espèces"
           couleur={CHART.especes}
           mouvements={[
-            { label: consomme ? "Entamé ce mois-ci" : "Regarni ce mois-ci", montant: coffre.entame },
+            ...(coffre.versements > 0
+              ? [{ label: "Versements reçus", montant: coffre.versements }]
+              : []),
+            ...(coffre.fondsConfies > 0
+              ? [{ label: "Fonds de caisse confiés", montant: -coffre.fondsConfies }]
+              : []),
+            ...(coffre.depenses > 0
+              ? [{ label: "Achats réglés en espèces", montant: -coffre.depenses }]
+              : []),
           ]}
-          fin={coffre.solde}
-          alerte={coffre.impossible}
+          net={coffre.variation}
           projete={projection?.coffre}
           projeteLabel={projeteLabel}
         />
@@ -229,22 +247,26 @@ function BlocTresorerie({
           couleur={CHART.wave}
           mouvements={[
             { label: "Encaissé ce mois-ci", montant: wave.encaisse },
-            ...(wave.depense > 0 ? [{ label: "Dépensé ce mois-ci", montant: wave.depense }] : []),
+            ...(wave.depense > 0
+              ? [{ label: "Achats réglés en Wave", montant: -wave.depense }]
+              : []),
           ]}
-          fin={wave.solde}
+          net={wave.encaisse - wave.depense}
           projete={projection?.wave}
           projeteLabel={projeteLabel}
         />
       </div>
 
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-        <span className="text-sm font-medium text-slate-600">Les deux poches réunies</span>
+        <span className="text-sm font-medium text-slate-600">
+          Ce que le mois a ajouté aux deux poches
+        </span>
         <span className="text-lg font-semibold tabular-nums">
-          {formatFCFA(tresorerie.solde)}
+          {formatSignedFCFA(tresorerie.variation)}
           {projection && (
             <span className="text-xs font-normal text-slate-400">
               {" "}
-              et {formatFCFA(Math.round(projection.total))} au {joursDansLeMois}
+              et {formatSignedFCFA(Math.round(projection.total))} au {joursDansLeMois}
             </span>
           )}
         </span>
@@ -271,11 +293,18 @@ function BlocTresorerie({
       )}
 
       {/* Un coffre négatif ne se constate pas, il se signale : la maison n'est
-          pas à sec, c'est le calcul qui a perdu le fil. */}
+          pas à sec, c'est le calcul qui a perdu le fil.
+
+          Le montant est dit ici et nulle part ailleurs : c'est un solde, report
+          compris, et le seul endroit du bloc où il apprend quelque chose. Sans
+          lui, l'alerte parlerait d'un chiffre que l'écran ne montre pas. */}
       {coffre.impossible && (
         <p className="mt-3 rounded-md border border-[#d03b3b] bg-[#d03b3b]/5 px-3 py-2 text-sm text-slate-700">
-          <span className="font-semibold text-[#d03b3b]">Le coffre ressort négatif</span>, ce
-          qu&apos;un coffre ne peut pas être : il manque quelque chose au calcul.{" "}
+          <span className="font-semibold text-[#d03b3b]">
+            Le coffre ressort négatif ({formatFCFA(coffre.solde)})
+          </span>{" "}
+          une fois ces mouvements ajoutés à ce qu&apos;il contenait au 1er, ce qu&apos;un coffre ne
+          peut pas être : il manque quelque chose au calcul.{" "}
           {nonRenseignees.nombre > 0
             ? "Commencez par les dépenses ci-dessus dont le règlement n'est pas renseigné : celles qui étaient des Wave creusent le coffre à tort."
             : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
@@ -304,15 +333,15 @@ function BlocTresorerie({
         </p>
       )}
 
-      {/* Un Wave négatif n'est pas une anomalie de calcul, contrairement au
-          coffre : le solde part du premier encaissement vu par l'application, et
-          le compte pouvait déjà contenir quelque chose avant elle. */}
-      {wave.solde < 0 && (
+      {/* Un Wave qui sort plus qu'il n'entre n'est pas une anomalie, contrairement
+          au coffre négatif : la maison peut très bien puiser un mois donné dans
+          ce que le compte avait accumulé les mois d'avant. Le dire évite de lire
+          ce moins comme un découvert. */}
+      {wave.depense > wave.encaisse && (
         <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Le compte Wave ressort négatif : la maison y a réglé plus de dépenses que
-          l&apos;application ne lui a vu encaisser de recettes. Ce n&apos;est pas nécessairement un
-          découvert — ce solde n&apos;est pas un relevé, il part du premier encaissement enregistré
-          et ignore ce que le compte contenait avant.
+          Le compte Wave a réglé plus d&apos;achats ce mois-ci qu&apos;il n&apos;a encaissé de
+          recettes. Ce n&apos;est pas un découvert : la maison puise dans ce que le compte avait
+          accumulé avant, que ces chiffres ne montrent pas.
         </p>
       )}
 
@@ -341,8 +370,8 @@ function BlocTresorerie({
 
       <p className="mt-2 text-xs text-slate-400">
         Le résultat du mois ({formatFCFA(resultat)}) n&apos;en est pas changé : une dépense reste une
-        charge du mois où elle est engagée, quelle que soit la poche qui l&apos;a payée. Le solde
-        Wave est ce que l&apos;application a vu passer, non un relevé du compte.{" "}
+        charge du mois où elle est engagée, quelle que soit la poche qui l&apos;a payée. Les
+        mouvements Wave sont ce que l&apos;application a vu passer, non un relevé du compte.{" "}
         <Link href="/comptabilite/caisse" className="text-orange-600 hover:underline">
           Voir le livre de caisse
         </Link>
