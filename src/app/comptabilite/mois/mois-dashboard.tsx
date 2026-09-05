@@ -84,7 +84,11 @@ function JaugeTaux({
 }
 
 /**
- * Une poche de la trésorerie : son parcours, du départ au 31.
+ * Une poche de la trésorerie : ce que le mois y a fait, et où elle en est.
+ *
+ * Le solde d'ouverture n'y figure pas : il appartient au mois précédent, et le
+ * lire ici revenait à faire porter au mois en cours un chiffre qu'il n'a pas
+ * gagné. Ne restent que les mouvements du mois et le solde du jour.
  *
  * Les mouvements sont une liste et non un chiffre unique : le coffre n'a qu'un
  * solde net à raconter, mais le Wave se remplit d'un côté et se vide de l'autre,
@@ -94,7 +98,6 @@ function Poche({
   titre,
   legende,
   couleur,
-  debut,
   mouvements,
   fin,
   alerte,
@@ -104,7 +107,6 @@ function Poche({
   titre: string;
   legende: string;
   couleur: string;
-  debut: number;
   mouvements: { label: string; montant: number }[];
   fin: number;
   alerte?: boolean;
@@ -120,10 +122,6 @@ function Poche({
       </div>
       <p className="mt-0.5 text-xs text-slate-400">{legende}</p>
       <dl className="mt-3 space-y-1.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-xs text-slate-400">En début de mois</dt>
-          <dd className="text-sm font-medium tabular-nums">{formatFCFA(debut)}</dd>
-        </div>
         {mouvements.map((m) => (
           <div key={m.label} className="flex items-baseline justify-between gap-2">
             <dt className="text-xs text-slate-400">{m.label}</dt>
@@ -207,9 +205,9 @@ function BlocTresorerie({
         </span>
       </div>
       <p className="mt-0.5 text-xs text-slate-400">
-        L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en reste. Il tient en
-        deux poches : les espèces du coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou
-        de l&apos;autre, selon le règlement indiqué à la saisie.
+        Ce que le mois a fait entrer et sortir, et l&apos;argent qu&apos;il y a aujourd&apos;hui sous
+        la main. Il tient en deux poches : les espèces du coffre, et le compte Wave. Chaque dépense
+        sort de l&apos;une ou de l&apos;autre, selon le règlement indiqué à la saisie.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -217,9 +215,8 @@ function BlocTresorerie({
           titre="Coffre"
           legende="Espèces : versements du soir, achats réglés en espèces"
           couleur={CHART.especes}
-          debut={coffre.report}
           mouvements={[
-            { label: consomme ? "Entamé depuis" : "Regarni depuis", montant: coffre.entame },
+            { label: consomme ? "Entamé ce mois-ci" : "Regarni ce mois-ci", montant: coffre.entame },
           ]}
           fin={coffre.solde}
           alerte={coffre.impossible}
@@ -230,7 +227,6 @@ function BlocTresorerie({
           titre="Compte Wave"
           legende="Recettes Wave, moins les achats réglés en Wave"
           couleur={CHART.wave}
-          debut={wave.report}
           mouvements={[
             { label: "Encaissé ce mois-ci", montant: wave.encaisse },
             ...(wave.depense > 0 ? [{ label: "Dépensé ce mois-ci", montant: wave.depense }] : []),
@@ -244,11 +240,13 @@ function BlocTresorerie({
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
         <span className="text-sm font-medium text-slate-600">Les deux poches réunies</span>
         <span className="text-lg font-semibold tabular-nums">
-          {formatFCFA(tresorerie.solde)}{" "}
-          <span className="text-xs font-normal text-slate-400">
-            contre {formatFCFA(tresorerie.report)} en début de mois
-            {projection && `, et ${formatFCFA(Math.round(projection.total))} au ${joursDansLeMois}`}
-          </span>
+          {formatFCFA(tresorerie.solde)}
+          {projection && (
+            <span className="text-xs font-normal text-slate-400">
+              {" "}
+              et {formatFCFA(Math.round(projection.total))} au {joursDansLeMois}
+            </span>
+          )}
         </span>
       </div>
 
