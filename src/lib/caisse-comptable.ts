@@ -312,8 +312,8 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
   // dépenses saines.
   //
   // Sans jour restant, il n'y a plus rien à prolonger : le dernier jour du mois,
-  // comme sur un mois déjà clos, la « projection au 31 » ne ferait que répéter
-  // le solde du jour en le donnant pour une prévision.
+  // la « projection au 31 » ne ferait que répéter le solde du jour en le donnant
+  // pour une prévision.
   const projection =
     joursRestants > 0 && joursEcoules >= JOURS_AVANT_PROJECTION
       ? {

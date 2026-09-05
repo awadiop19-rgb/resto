@@ -74,7 +74,12 @@ async function calculerMois(debut: Date, borne: Date, clos: boolean) {
     // ne change rien au résultat, mais dit avec quoi les premiers achats ont été
     // réglés — un mois qui démarre sur une réserve n'est pas un mois qui démarre
     // à zéro — et où sont passées les recettes qui n'ont pas fini au coffre.
-    getTresorerieDuMois(debut, finDuMois, borne),
+    //
+    // Rien de tout cela sur un mois clos : la trésorerie se lit pour agir — un
+    // coffre qui va manquer se corrige tant qu'il reste des jours. Rouverte des
+    // mois plus tard, elle n'apprendrait qu'une chose, le report du mois
+    // précédent, qui appartient à ce mois-là et non à celui qu'on regarde.
+    clos ? null : getTresorerieDuMois(debut, finDuMois, borne),
   ]);
 
   const recettes = paiements.reduce((s, p) => s + p.amount, 0);

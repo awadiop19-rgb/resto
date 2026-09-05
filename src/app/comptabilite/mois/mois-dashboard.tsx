@@ -97,7 +97,6 @@ function Poche({
   debut,
   mouvements,
   fin,
-  finLabel,
   alerte,
   projete,
   projeteLabel,
@@ -108,8 +107,6 @@ function Poche({
   debut: number;
   mouvements: { label: string; montant: number }[];
   fin: number;
-  /** Ce que « fin » désigne : le jour même sur un mois en cours, le 31 sur un mois clos. */
-  finLabel: string;
   alerte?: boolean;
   /** Où la poche finirait le mois au rythme actuel, `null` s'il est trop tôt. */
   projete?: number | null;
@@ -134,7 +131,7 @@ function Poche({
           </div>
         ))}
         <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-1.5">
-          <dt className="text-xs font-medium text-slate-600">{finLabel}</dt>
+          <dt className="text-xs font-medium text-slate-600">Aujourd&apos;hui</dt>
           <dd
             className={`text-lg font-semibold tabular-nums ${alerte ? "text-[#d03b3b]" : ""}`}
           >
@@ -177,25 +174,24 @@ function Poche({
  * répond à une autre question : celui-là dit si le mois gagne de l'argent,
  * celui-ci dit s'il en aura sous la main. Un mois peut très bien être rentable
  * et manquer d'espèces le 20.
+ *
+ * Réservé au mois en cours : ce bloc se lit pour agir, et rien de tout cela ne
+ * se corrige sur un mois révolu. Rouvert des mois plus tard, il n'apprendrait
+ * qu'une chose — le report du mois précédent — qui appartient à ce mois-là.
  */
 function BlocTresorerie({
   tresorerie,
   recettes,
   resultat,
   joursDansLeMois,
-  clos,
 }: {
   tresorerie: TresorerieDuMois;
   recettes: number;
   resultat: number;
   joursDansLeMois: number;
-  clos: boolean;
 }) {
   const { coffre, wave, projection, nonRenseignees } = tresorerie;
   const projeteLabel = `Au ${joursDansLeMois}, au rythme actuel`;
-  // Un mois clos ne se raconte pas au présent : ses soldes sont ceux du 31, et
-  // les alertes qu'il portait ne s'adressent plus à personne.
-  const finLabel = clos ? `Au ${joursDansLeMois}` : "Aujourd'hui";
   // Un coffre peut être regarni plutôt qu'entamé : un mois qui encaisse en
   // espèces plus qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a
   // trouvé.
@@ -211,10 +207,9 @@ function BlocTresorerie({
         </span>
       </div>
       <p className="mt-0.5 text-xs text-slate-400">
-        L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en{" "}
-        {clos ? "restait au dernier jour" : "reste"}. Il tient en deux poches : les espèces du
-        coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou de l&apos;autre, selon le
-        règlement indiqué à la saisie.
+        L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en reste. Il tient en
+        deux poches : les espèces du coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou
+        de l&apos;autre, selon le règlement indiqué à la saisie.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -227,7 +222,6 @@ function BlocTresorerie({
             { label: consomme ? "Entamé depuis" : "Regarni depuis", montant: coffre.entame },
           ]}
           fin={coffre.solde}
-          finLabel={finLabel}
           alerte={coffre.impossible}
           projete={projection?.coffre}
           projeteLabel={projeteLabel}
@@ -242,7 +236,6 @@ function BlocTresorerie({
             ...(wave.depense > 0 ? [{ label: "Dépensé ce mois-ci", montant: wave.depense }] : []),
           ]}
           fin={wave.solde}
-          finLabel={finLabel}
           projete={projection?.wave}
           projeteLabel={projeteLabel}
         />
@@ -287,9 +280,7 @@ function BlocTresorerie({
           qu&apos;un coffre ne peut pas être : il manque quelque chose au calcul.{" "}
           {nonRenseignees.nombre > 0
             ? "Commencez par les dépenses ci-dessus dont le règlement n'est pas renseigné : celles qui étaient des Wave creusent le coffre à tort."
-            : clos
-              ? "Il manquait sans doute un comptage sur ce mois-là, qui aurait recalé le coffre sur ce qu'il contenait réellement."
-              : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
+            : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
           <Link href="/comptabilite/caisse" className="font-medium text-orange-600 hover:underline">
             Compter la caisse
           </Link>
@@ -336,9 +327,7 @@ function BlocTresorerie({
           du mois ({formatFCFA(wave.encaisse)}) sont entrées sur le compte Wave, dont{" "}
           {formatFCFA(wave.depense)} en sont ressortis pour régler des achats.{" "}
           {consomme
-            ? clos
-              ? "Le coffre s'est malgré tout vidé plus vite que le mois n'a perdu d'argent — un résultat et une trésorerie sont deux questions différentes."
-              : "Le coffre se vide malgré tout plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
+            ? "Le coffre se vide malgré tout plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
             : "Le coffre n'en a pas moins tenu : les espèces encaissées ont suffi aux achats qu'il a portés."}
         </p>
       )}
@@ -536,13 +525,14 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
         {verdict.conseil && <p className={`mt-2 text-sm font-medium ${n.encre}`}>{verdict.conseil}</p>}
       </div>
 
+      {/* `tresorerie` est déjà nulle sur un mois clos : le calcul ne la fait pas.
+          Voir `mois-comptable`. */}
       {data.tresorerie && (
         <BlocTresorerie
           tresorerie={data.tresorerie}
           recettes={data.recettes}
           resultat={data.resultat}
           joursDansLeMois={data.joursDansLeMois}
-          clos={data.clos}
         />
       )}
 
