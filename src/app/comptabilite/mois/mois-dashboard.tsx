@@ -222,19 +222,39 @@ function BlocTresorerie({
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/* Le versement du soir est décomposé plutôt qu'affiché en bloc : un achat
+            réglé au comptoir en est déduit avant même d'arriver au coffre, et
+            n'apparaîtrait donc nulle part comme une dépense — bien compté, mais
+            invisible. Les deux dernières lignes ne se montrent que si elles disent
+            quelque chose : un écart de caisse nul ou un tiroir déjà rendu n'ont
+            pas à occuper une ligne. */}
         <Poche
           titre="Coffre"
-          legende="Espèces : versements du soir, achats réglés en espèces"
+          legende="Espèces : ce que les caissiers versent, ce que le coffre paie"
           couleur={CHART.especes}
           mouvements={[
-            ...(coffre.versements > 0
-              ? [{ label: "Versements reçus", montant: coffre.versements }]
+            ...(coffre.recettesEspeces > 0
+              ? [{ label: "Recettes encaissées en espèces", montant: coffre.recettesEspeces }]
               : []),
-            ...(coffre.fondsConfies > 0
-              ? [{ label: "Fonds de caisse confiés", montant: -coffre.fondsConfies }]
+            ...(coffre.achatsAuTiroir !== 0
+              ? [{ label: "Achats réglés au tiroir", montant: -coffre.achatsAuTiroir }]
               : []),
             ...(coffre.depenses > 0
-              ? [{ label: "Achats réglés en espèces", montant: -coffre.depenses }]
+              ? [{ label: "Achats réglés sur le coffre", montant: -coffre.depenses }]
+              : []),
+            ...(coffre.ecartsCaisse !== 0
+              ? [{ label: "Écarts de caisse", montant: coffre.ecartsCaisse }]
+              : []),
+            ...(coffre.fondsDeCaisse !== 0
+              ? [
+                  {
+                    label:
+                      coffre.fondsDeCaisse < 0
+                        ? "Fonds de caisse encore en tiroir"
+                        : "Fonds de caisse rendus",
+                    montant: coffre.fondsDeCaisse,
+                  },
+                ]
               : []),
           ]}
           net={coffre.variation}

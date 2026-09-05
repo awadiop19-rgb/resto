@@ -84,6 +84,9 @@ async function mouvementsCoffre(depuis: Date, jusqua?: Date) {
       select: {
         id: true,
         closedAt: true,
+        openingFloat: true,
+        totalCash: true,
+        expectedCash: true,
         declaredAmount: true,
         correctedAmount: true,
         cashier: { select: { name: true } },
@@ -114,6 +117,48 @@ async function mouvementsCoffre(depuis: Date, jusqua?: Date) {
   );
   const depensesReglees = depenses.reduce((s, e) => s + e.amount, 0);
 
+  // ------------------------------------------ Ce que le versement contenait
+  //
+  // Un versement du soir est un montant unique, mais il additionne quatre
+  // choses : le fond de caisse qui revient, les espèces encaissées dans la
+  // journée, moins les achats que le caissier a réglés depuis son tiroir, plus
+  // ou moins ce que son comptage a trouvé en trop ou en moins. Sans cette
+  // décomposition, une dépense payée au comptoir n'apparaît nulle part — elle
+  // est bien déduite, mais à l'intérieur d'un chiffre qui ne la nomme pas.
+  //
+  // Les sorties se retrouvent par soustraction plutôt que par une requête sur
+  // les dépenses : `expectedCash` a été figé à la clôture avec les dépenses
+  // d'alors, et une dépense rattachée après coup au tiroir déséquilibrerait un
+  // versement déjà encaissé. Le chiffre reconstruit ici est celui que le
+  // caissier a effectivement versé.
+  //
+  // Seules les caisses closes comptent. Une dépense réglée dans un tiroir encore
+  // ouvert n'a pas à figurer : son fond de caisse est déjà sorti du coffre en
+  // entier, et la déduire une seconde fois la compterait deux fois. Elle
+  // apparaîtra à la clôture, dans un versement d'autant plus léger.
+  let recettesEspeces = 0;
+  let achatsAuTiroir = 0;
+  let ecartsCaisse = 0;
+  let fondsRendus = 0;
+  for (const c of cloturees) {
+    const verse = c.correctedAmount ?? c.declaredAmount ?? 0;
+    fondsRendus += c.openingFloat;
+
+    if (c.expectedCash == null) {
+      // Clôtures antérieures à l'enregistrement de leur détail : le versement
+      // revient en bloc, sans qu'on sache ce qu'il contenait. Le porter en
+      // recettes est le seul choix qui ne lui invente ni écart ni dépense — les
+      // deux se liraient comme des faits alors qu'ils seraient des artefacts.
+      recettesEspeces += verse - c.openingFloat;
+      continue;
+    }
+
+    const encaisse = c.totalCash ?? 0;
+    recettesEspeces += encaisse;
+    achatsAuTiroir += c.openingFloat + encaisse - c.expectedCash;
+    ecartsCaisse += verse - c.expectedCash;
+  }
+
   return {
     ouvertures,
     cloturees,
@@ -121,7 +166,23 @@ async function mouvementsCoffre(depuis: Date, jusqua?: Date) {
     fondsConfies,
     versementsRecus,
     depensesReglees,
-    /** Ce que l'intervalle a ajouté au coffre, négatif s'il l'a vidé. */
+
+    /** Espèces encaissées par les caissiers, remontées au coffre à la clôture. */
+    recettesEspeces,
+    /** Achats que les caissiers ont réglés depuis leur tiroir, avant de verser. */
+    achatsAuTiroir,
+    /** Ce que les comptages ont trouvé en trop (positif) ou en moins (négatif). */
+    ecartsCaisse,
+    /** Fonds de caisse revenus au coffre avec les versements de l'intervalle. */
+    fondsRendus,
+
+    /**
+     * Ce que l'intervalle a ajouté au coffre, négatif s'il l'a vidé.
+     *
+     * Vaut, à l'identique : `recettesEspeces - achatsAuTiroir + ecartsCaisse +
+     * (fondsRendus - fondsConfies) - depensesReglees`. C'est cette somme-là que
+     * l'écran affiche ligne à ligne, et elle doit continuer de tomber juste.
+     */
     variation: versementsRecus - fondsConfies - depensesReglees,
   };
 }
@@ -337,21 +398,29 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
     /** Ce que le mois a prélevé sur le report, négatif s'il l'a au contraire regarni. */
     entame: ouverture.solde - soldeActuel,
 
-    // Les seuls mouvements du mois, détaillés — ce sont eux que l'écran montre.
-    // Le report appartient au mois précédent : le mêler aux entrées du mois
-    // ferait porter à celui-ci un argent qu'il n'a pas gagné.
+    // Les seuls mouvements du mois, détaillés — ce sont eux que l'écran montre,
+    // et leur somme signée fait `variation`. Le report appartient au mois
+    // précédent : le mêler aux entrées du mois ferait porter à celui-ci un
+    // argent qu'il n'a pas gagné.
     //
     // `variation` ne vaut pas `-entame` dès qu'un comptage a recalé le coffre en
     // cours de mois : l'écart corrigé se loge dans l'entame et non dans les
     // mouvements. C'est la variation qui dit ce que le mois a fait ; l'entame dit
     // seulement où le coffre en est arrivé.
-    /** Espèces remontées des caisses à la clôture, fonds de caisse compris. */
-    versements: mouvements.versementsRecus,
-    /** Fonds de caisse sortis vers les tiroirs — ils reviennent au versement du soir. */
-    fondsConfies: mouvements.fondsConfies,
+    /** Espèces encaissées par les caissiers et remontées au coffre. */
+    recettesEspeces: mouvements.recettesEspeces,
+    /** Achats réglés par un caissier depuis son tiroir, avant le versement. */
+    achatsAuTiroir: mouvements.achatsAuTiroir,
     /** Achats du mois réglés en espèces prises au coffre. */
     depenses: mouvements.depensesReglees,
-    /** Somme signée des trois lignes ci-dessus : ce que le mois a ajouté au coffre. */
+    /** Ce que les comptages de tiroir ont trouvé en trop ou en moins. */
+    ecartsCaisse: mouvements.ecartsCaisse,
+    /**
+     * Fonds de caisse rendus moins fonds confiés. Négatif quand un tiroir est
+     * encore ouvert, positif quand un service de la veille s'est clôturé ici.
+     */
+    fondsDeCaisse: mouvements.fondsRendus - mouvements.fondsConfies,
+    /** Somme signée des cinq lignes ci-dessus. */
     variation: mouvements.variation,
 
     creux,
