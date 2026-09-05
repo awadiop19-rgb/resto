@@ -310,8 +310,12 @@ export async function getTresorerieDuMois(debut: Date, fin: Date, maintenant = n
   // semaines, mais une droite le rachète chaque jour — sur trois jours, elle
   // annoncerait une rupture de coffre qui n'arrivera pas, et ferait couper des
   // dépenses saines.
+  //
+  // Sans jour restant, il n'y a plus rien à prolonger : le dernier jour du mois,
+  // comme sur un mois déjà clos, la « projection au 31 » ne ferait que répéter
+  // le solde du jour en le donnant pour une prévision.
   const projection =
-    joursEcoules >= JOURS_AVANT_PROJECTION
+    joursRestants > 0 && joursEcoules >= JOURS_AVANT_PROJECTION
       ? {
           coffre: soldeActuel + rythmeCoffre * joursRestants,
           wave: wave.solde + rythmeWave * joursRestants,

@@ -41,8 +41,12 @@ export type Verdict = {
   niveau: NiveauMois;
   titre: string;
   message: string;
-  /** Ce que le comptable doit faire, en une phrase. */
-  conseil: string;
+  /**
+   * Ce que le comptable doit faire, en une phrase. Absent sur un mois clos : il
+   * n'y a plus rien à corriger, et une consigne rétroactive ne serait qu'un
+   * reproche.
+   */
+  conseil?: string;
 };
 
 /** Ce dont la lecture a besoin, sans dépendre de la forme complète du calcul. */
@@ -156,5 +160,74 @@ export function verdictDuMois(data: DonneesVerdict): Verdict {
     titre: "Le mois est bien engagé",
     message: `La projection donne ${projete} % de dépenses, sous l'objectif de ${SEUILS.confortable} %.`,
     conseil: consignePour(data.budgetConfortable, SEUILS.confortable),
+  };
+}
+
+/** Ce dont la lecture d'un mois révolu a besoin. */
+export type DonneesMoisClos = {
+  recettes: number;
+  depenses: number;
+  resultat: number;
+  taux: number | null;
+};
+
+/**
+ * Traduit un mois révolu en une conclusion, sans consigne.
+ *
+ * Un mois clos ne se pilote plus : il se constate. Le verdict porte donc sur le
+ * taux réellement atteint — jamais sur une projection, qui n'a plus d'objet — et
+ * ne dit pas quoi corriger, puisqu'il n'y a plus de jours sur lesquels agir.
+ * C'est ce qui le distingue de `verdictDuMois` : le même palier, lu à un moment
+ * où il ne commande plus rien.
+ */
+export function verdictMoisClos(data: DonneesMoisClos): Verdict {
+  const { recettes, depenses, resultat, taux } = data;
+  const f = (v: number) => `${Math.round(v).toLocaleString("fr-FR")} F`;
+
+  if (recettes <= 0) {
+    return {
+      niveau: "indetermine",
+      titre: "Aucune recette sur ce mois",
+      message:
+        depenses > 0
+          ? `Aucun encaissement n'a été enregistré, pour ${f(depenses)} de dépenses : le taux n'a rien à mesurer, et le mois ne se compare à aucun autre.`
+          : "Ni recette ni dépense n'a été enregistrée sur ce mois.",
+    };
+  }
+
+  const niveau = niveauPourTaux(taux);
+  const atteint = taux!.toFixed(0);
+  // Le résultat porte le fait, le taux le situe : deux mois qui gagnent autant
+  // ne se ressemblent pas si l'un y a mis 60 % de ses recettes et l'autre 95 %.
+  const socle = `Les dépenses ont absorbé ${atteint} % des recettes (${f(depenses)} sur ${f(recettes)}).`;
+
+  if (niveau === "perte") {
+    return {
+      niveau,
+      titre: "Le mois s'est terminé à perte",
+      message: `${socle} Le mois a coûté ${f(-resultat)} de plus qu'il n'a rapporté.`,
+    };
+  }
+
+  if (niveau === "tendu") {
+    return {
+      niveau,
+      titre: "Le mois a été tendu",
+      message: `${socle} Il reste ${f(resultat)}, mais la marge était mince : au-delà de ${SEUILS.tendu} %, il serait passé à perte.`,
+    };
+  }
+
+  if (niveau === "surveiller") {
+    return {
+      niveau,
+      titre: "Le mois a été tenu",
+      message: `${socle} C'est au-dessus de l'objectif de ${SEUILS.confortable} %, sans avoir été en danger. Le mois laisse ${f(resultat)}.`,
+    };
+  }
+
+  return {
+    niveau,
+    titre: "Le mois s'est bien tenu",
+    message: `${socle} C'est sous l'objectif de ${SEUILS.confortable} %. Le mois laisse ${f(resultat)}.`,
   };
 }

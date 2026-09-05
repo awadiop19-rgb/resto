@@ -88,6 +88,16 @@ const TRACES: Record<NomIcone, React.ReactNode> = {
       <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
     </>
   ),
+  // Le meme calendrier que `mois`, mais empile : ce qui distingue l'historique
+  // du mois en cours n'est pas sa nature, c'est qu'il y en a plusieurs. Une
+  // fleche vers l'arriere aurait dit « annuler », pas « les mois precedents ».
+  historique: (
+    <>
+      <path d="M7 5h11.5A1.5 1.5 0 0 1 20 6.5V17" />
+      <rect x="3" y="8" width="14" height="12.5" rx="2" />
+      <path d="M3 12.5h14M7 6.5v3M13 6.5v3" />
+    </>
+  ),
   // Un coffre-fort, avec sa porte et sa molette : `caisse` est deja un tiroir,
   // et les deux ne designent pas le meme argent.
   coffre: (

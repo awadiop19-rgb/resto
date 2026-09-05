@@ -12,7 +12,7 @@ import { getTresorerieDuMois } from "@/lib/caisse-comptable";
 import { JOURS_AVANT_PROJECTION, niveauPourTaux, SEUILS } from "@/lib/mois-verdict";
 
 /**
- * Croisement recettes / dépenses du mois en cours.
+ * Croisement recettes / dépenses d'un mois.
  *
  * Les recettes retenues ici sont les encaissements, pas les versements : le taux
  * doit rester lisible en cours de journée, or une recette n'entre en versement
@@ -23,15 +23,43 @@ import { JOURS_AVANT_PROJECTION, niveauPourTaux, SEUILS } from "@/lib/mois-verdi
  * base et peut donc être lue côté client.
  */
 
-export type MoisComptable = Awaited<ReturnType<typeof getMoisComptable>>;
+export type MoisComptable = Awaited<ReturnType<typeof calculerMois>>;
 
+/**
+ * Le mois en cours, arrêté à l'instant présent.
+ *
+ * Bornes lues dans le fuseau du serveur, que `instrumentation.ts` fixe à GMT :
+ * c'est celui de Dakar, et celui dans lequel les dépenses saisies au jour sont
+ * enregistrées. Sans cette garantie, le 1er du mois basculerait dans le mois
+ * précédent et sortirait du total.
+ */
 export async function getMoisComptable(maintenant = new Date()) {
-  // Bornes lues dans le fuseau du serveur, que `instrumentation.ts` fixe à GMT :
-  // c'est celui de Dakar, et celui dans lequel les dépenses saisies au jour sont
-  // enregistrées. Sans cette garantie, le 1er du mois basculerait dans le mois
-  // précédent et sortirait du total.
-  const debut = startOfMonth(maintenant);
-  const finDuMois = endOfMonth(maintenant);
+  return calculerMois(startOfMonth(maintenant), maintenant, false);
+}
+
+/**
+ * Un mois révolu, lu dans son entier.
+ *
+ * Le même calcul, arrêté au dernier jour plutôt qu'à aujourd'hui. Ce qui change
+ * n'est pas l'arithmétique mais ce qu'on peut en tirer : un mois clos n'a plus
+ * de fin à projeter ni d'enveloppe à tenir, et l'écran doit le taire plutôt que
+ * d'afficher une consigne sur des jours qui n'existent plus.
+ */
+export async function getMoisClos(mois: Date) {
+  const debut = startOfMonth(mois);
+  return calculerMois(debut, endOfMonth(debut), true);
+}
+
+/**
+ * Le calcul commun, borné à `borne` — aujourd'hui pour le mois en cours, le
+ * dernier jour pour un mois révolu.
+ *
+ * Une seule fonction pour les deux : deux versions finiraient par diverger sur
+ * un détail, et l'historique contredirait ce que la page du mois avait annoncé
+ * la veille de sa clôture.
+ */
+async function calculerMois(debut: Date, borne: Date, clos: boolean) {
+  const finDuMois = endOfMonth(debut);
 
   const [paiements, depensesBrutes, tresorerie] = await Promise.all([
     prisma.payment.findMany({
@@ -46,7 +74,7 @@ export async function getMoisComptable(maintenant = new Date()) {
     // ne change rien au résultat, mais dit avec quoi les premiers achats ont été
     // réglés — un mois qui démarre sur une réserve n'est pas un mois qui démarre
     // à zéro — et où sont passées les recettes qui n'ont pas fini au coffre.
-    getTresorerieDuMois(debut, finDuMois, maintenant),
+    getTresorerieDuMois(debut, finDuMois, borne),
   ]);
 
   const recettes = paiements.reduce((s, p) => s + p.amount, 0);
@@ -57,8 +85,8 @@ export async function getMoisComptable(maintenant = new Date()) {
   // taux infini là où il n'y a simplement rien à mesurer.
   const taux = recettes > 0 ? (depenses / recettes) * 100 : null;
 
-  const joursDansLeMois = getDaysInMonth(maintenant);
-  const joursEcoules = differenceInCalendarDays(maintenant, debut) + 1;
+  const joursDansLeMois = getDaysInMonth(debut);
+  const joursEcoules = differenceInCalendarDays(borne, debut) + 1;
   const joursRestants = Math.max(0, joursDansLeMois - joursEcoules);
 
   const recettesParJour = recettes / joursEcoules;
@@ -66,7 +94,7 @@ export async function getMoisComptable(maintenant = new Date()) {
 
   // ------------------------------------------------------------------ Série
 
-  const jours = eachDayOfInterval({ start: debut, end: maintenant });
+  const jours = eachDayOfInterval({ start: debut, end: borne });
   const recettesParDate = new Map<string, number>();
   const depensesParDate = new Map<string, number>();
   for (const p of paiements) {
@@ -119,7 +147,10 @@ export async function getMoisComptable(maintenant = new Date()) {
 
   // ------------------------------------------------------------ Projection
 
-  const projetable = joursEcoules >= JOURS_AVANT_PROJECTION;
+  // Un mois clos n'a rien à projeter : sa fin est connue. Prolonger son rythme
+  // jusqu'au 31 redonnerait, au mieux, les chiffres déjà constatés — présentés
+  // comme une prévision.
+  const projetable = !clos && joursEcoules >= JOURS_AVANT_PROJECTION;
   const recettesProjetees = projetable ? recettesParJour * joursDansLeMois : null;
   const depensesProjetees = projetable ? depensesParJour * joursDansLeMois : null;
   const tauxProjete =
@@ -163,8 +194,12 @@ export async function getMoisComptable(maintenant = new Date()) {
 
   return {
     moisLabel: format(debut, "MMMM yyyy", { locale: fr }),
+    /** Clé d'URL du mois : « 2026-08 ». */
+    cle: format(debut, "yyyy-MM"),
     debut,
     fin: finDuMois,
+    /** Le mois est-il révolu ? L'écran en dépend plus que le calcul. */
+    clos,
     joursDansLeMois,
     joursEcoules,
     joursRestants,

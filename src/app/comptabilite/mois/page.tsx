@@ -21,9 +21,17 @@ export default async function MoisComptablePage() {
               le mois.
             </p>
           </div>
-          <Link href="/comptabilite" className="text-xs text-orange-600 hover:underline">
-            Tableau de bord
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/comptabilite/mois/historique"
+              className="text-xs text-orange-600 hover:underline"
+            >
+              Les mois passés
+            </Link>
+            <Link href="/comptabilite" className="text-xs text-orange-600 hover:underline">
+              Tableau de bord
+            </Link>
+          </div>
         </div>
 
         <MoisDashboard data={data} />

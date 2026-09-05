@@ -22,33 +22,8 @@ import type { TresorerieDuMois } from "@/lib/caisse-comptable";
 // `import type` obligatoire ici : le module de calcul importe Prisma, qui n'a
 // rien à faire dans un bundle navigateur. Seuls les types en sont tirés.
 import type { MoisComptable } from "@/lib/mois-comptable";
-import { SEUILS, verdictDuMois, type NiveauMois } from "@/lib/mois-verdict";
-
-/**
- * Recettes et Dépenses sont deux identités, pas deux états : elles gardent la
- * paire catégorielle validée du dépôt, et non le vert/rouge réservé au statut.
- */
-const SERIE = { recettes: CHART.magnitude, depenses: CHART.magnitudeAlt } as const;
-
-/**
- * Le fond porte le niveau, le texte le nomme. L'ambre du jeu graphique est trop
- * clair pour un texte : les libellés reprennent l'encre foncée des tuiles.
- */
-const NIVEAUX: Record<NiveauMois, { libelle: string; fond: string; encre: string; barre: string }> = {
-  confortable: { libelle: "Confortable", fond: "bg-emerald-50 border-emerald-200", encre: "text-emerald-800", barre: CHART.bon },
-  surveiller: { libelle: "À surveiller", fond: "bg-amber-50 border-amber-200", encre: "text-amber-900", barre: CHART.alerte },
-  tendu: { libelle: "Tendu", fond: "bg-orange-50 border-orange-200", encre: "text-orange-900", barre: CHART.magnitudeAlt },
-  perte: { libelle: "À perte", fond: "bg-red-50 border-red-200", encre: "text-red-800", barre: CHART.critique },
-  indetermine: { libelle: "Indéterminé", fond: "bg-slate-50 border-slate-200", encre: "text-slate-700", barre: CHART.axe },
-};
-
-const TONE_PAR_NIVEAU = {
-  confortable: "bon",
-  surveiller: "alerte",
-  tendu: "alerte",
-  perte: "critique",
-  indetermine: "neutre",
-} as const;
+import { NIVEAUX, SERIE, TONE_PAR_NIVEAU } from "@/lib/mois-niveaux";
+import { SEUILS, verdictDuMois, verdictMoisClos, type NiveauMois } from "@/lib/mois-verdict";
 
 /**
  * Le taux lu contre ses paliers. Une jauge plutôt qu'un graphique : c'est une
@@ -57,16 +32,17 @@ const TONE_PAR_NIVEAU = {
 function JaugeTaux({
   taux,
   niveau,
-  projetable,
+  conclusif,
 }: {
   taux: number | null;
   niveau: NiveauMois;
-  projetable: boolean;
+  /** Le taux est-il assez établi pour porter son palier — mois clos, ou assez avancé ? */
+  conclusif: boolean;
 }) {
   // Trop tôt dans le mois, le palier est un artefact : la jauge reste neutre et
   // le dit, plutôt que d'afficher un niveau que le verdict contredit.
-  const n = projetable ? NIVEAUX[niveau] : NIVEAUX.indetermine;
-  const libelle = projetable ? n.libelle : taux == null ? "Indéterminé" : "Trop tôt pour conclure";
+  const n = conclusif ? NIVEAUX[niveau] : NIVEAUX.indetermine;
+  const libelle = conclusif ? n.libelle : taux == null ? "Indéterminé" : "Trop tôt pour conclure";
   // Au-delà de 100 %, la jauge sature : la barre dirait « presque plein » là où
   // le seuil est déjà franchi.
   const largeur = taux == null ? 0 : Math.min(100, (taux / 120) * 100);
@@ -121,6 +97,7 @@ function Poche({
   debut,
   mouvements,
   fin,
+  finLabel,
   alerte,
   projete,
   projeteLabel,
@@ -131,6 +108,8 @@ function Poche({
   debut: number;
   mouvements: { label: string; montant: number }[];
   fin: number;
+  /** Ce que « fin » désigne : le jour même sur un mois en cours, le 31 sur un mois clos. */
+  finLabel: string;
   alerte?: boolean;
   /** Où la poche finirait le mois au rythme actuel, `null` s'il est trop tôt. */
   projete?: number | null;
@@ -155,7 +134,7 @@ function Poche({
           </div>
         ))}
         <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-1.5">
-          <dt className="text-xs font-medium text-slate-600">Aujourd&apos;hui</dt>
+          <dt className="text-xs font-medium text-slate-600">{finLabel}</dt>
           <dd
             className={`text-lg font-semibold tabular-nums ${alerte ? "text-[#d03b3b]" : ""}`}
           >
@@ -204,14 +183,19 @@ function BlocTresorerie({
   recettes,
   resultat,
   joursDansLeMois,
+  clos,
 }: {
   tresorerie: TresorerieDuMois;
   recettes: number;
   resultat: number;
   joursDansLeMois: number;
+  clos: boolean;
 }) {
   const { coffre, wave, projection, nonRenseignees } = tresorerie;
   const projeteLabel = `Au ${joursDansLeMois}, au rythme actuel`;
+  // Un mois clos ne se raconte pas au présent : ses soldes sont ceux du 31, et
+  // les alertes qu'il portait ne s'adressent plus à personne.
+  const finLabel = clos ? `Au ${joursDansLeMois}` : "Aujourd'hui";
   // Un coffre peut être regarni plutôt qu'entamé : un mois qui encaisse en
   // espèces plus qu'il ne dépense repart avec un coffre plus lourd qu'il ne l'a
   // trouvé.
@@ -227,9 +211,10 @@ function BlocTresorerie({
         </span>
       </div>
       <p className="mt-0.5 text-xs text-slate-400">
-        L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en reste. Il tient en
-        deux poches : les espèces du coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou
-        de l&apos;autre, selon le règlement indiqué à la saisie.
+        L&apos;argent dont le mois disposait en commençant, et ce qu&apos;il en{" "}
+        {clos ? "restait au dernier jour" : "reste"}. Il tient en deux poches : les espèces du
+        coffre, et le compte Wave. Chaque dépense sort de l&apos;une ou de l&apos;autre, selon le
+        règlement indiqué à la saisie.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -242,6 +227,7 @@ function BlocTresorerie({
             { label: consomme ? "Entamé depuis" : "Regarni depuis", montant: coffre.entame },
           ]}
           fin={coffre.solde}
+          finLabel={finLabel}
           alerte={coffre.impossible}
           projete={projection?.coffre}
           projeteLabel={projeteLabel}
@@ -256,6 +242,7 @@ function BlocTresorerie({
             ...(wave.depense > 0 ? [{ label: "Dépensé ce mois-ci", montant: wave.depense }] : []),
           ]}
           fin={wave.solde}
+          finLabel={finLabel}
           projete={projection?.wave}
           projeteLabel={projeteLabel}
         />
@@ -300,7 +287,9 @@ function BlocTresorerie({
           qu&apos;un coffre ne peut pas être : il manque quelque chose au calcul.{" "}
           {nonRenseignees.nombre > 0
             ? "Commencez par les dépenses ci-dessus dont le règlement n'est pas renseigné : celles qui étaient des Wave creusent le coffre à tort."
-            : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
+            : clos
+              ? "Il manquait sans doute un comptage sur ce mois-là, qui aurait recalé le coffre sur ce qu'il contenait réellement."
+              : "Il manque sans doute un comptage récent, qui recalerait le coffre sur ce qu'il contient réellement."}{" "}
           <Link href="/comptabilite/caisse" className="font-medium text-orange-600 hover:underline">
             Compter la caisse
           </Link>
@@ -347,7 +336,9 @@ function BlocTresorerie({
           du mois ({formatFCFA(wave.encaisse)}) sont entrées sur le compte Wave, dont{" "}
           {formatFCFA(wave.depense)} en sont ressortis pour régler des achats.{" "}
           {consomme
-            ? "Le coffre se vide malgré tout plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
+            ? clos
+              ? "Le coffre s'est malgré tout vidé plus vite que le mois n'a perdu d'argent — un résultat et une trésorerie sont deux questions différentes."
+              : "Le coffre se vide malgré tout plus vite que le mois ne perd de l'argent — un résultat et une trésorerie sont deux questions différentes."
             : "Le coffre n'en a pas moins tenu : les espèces encaissées ont suffi aux achats qu'il a portés."}
         </p>
       )}
@@ -373,13 +364,113 @@ function BlocTresorerie({
   );
 }
 
+/**
+ * Ce que le mois a été, une fois qu'il n'y a plus rien à en attendre.
+ *
+ * Prend la place de « Fin de mois » sur un mois clos : la question n'est plus
+ * où le mois va finir, mais comment il s'est tenu. Les moyennes situent le
+ * régime ordinaire, les deux journées extrêmes disent de combien il a varié —
+ * un mois qui gagne 20 000 F par jour et un mois qui alterne 80 000 et zéro
+ * laissent le même total et ne se pilotent pas pareil.
+ */
+function ResumeMoisClos({ data }: { data: MoisComptable }) {
+  const avecRecette = data.serie.filter((j) => j.recettes > 0);
+  const meilleur = avecRecette.reduce<(typeof data.serie)[number] | null>(
+    (best, j) => (best == null || j.recettes > best.recettes ? j : best),
+    null
+  );
+  const plusLourd = data.serie.reduce<(typeof data.serie)[number] | null>(
+    (pire, j) => (j.depenses > 0 && (pire == null || j.depenses > pire.depenses) ? j : pire),
+    null
+  );
+  const jourMoyen = data.resultat / data.joursDansLeMois;
+  const creuses = data.serie.length - avecRecette.length;
+
+  return (
+    <>
+      <dl className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <dt className="text-xs text-slate-400">Recettes par jour</dt>
+          <dd className="text-lg font-semibold tabular-nums">
+            {formatFCFA(Math.round(data.recettesParJour))}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-400">Dépenses par jour</dt>
+          <dd className="text-lg font-semibold tabular-nums">
+            {formatFCFA(Math.round(data.depensesParJour))}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-400">Résultat par jour</dt>
+          <dd
+            className={`text-lg font-semibold tabular-nums ${
+              jourMoyen >= 0 ? "text-[#0ca30c]" : "text-[#d03b3b]"
+            }`}
+          >
+            {formatFCFA(Math.round(jourMoyen))}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          Les journées qui ont compté
+        </p>
+        <dl className="space-y-1.5 text-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-slate-500">Meilleure recette</dt>
+            <dd className="font-medium tabular-nums">
+              {meilleur ? (
+                <>
+                  {formatFCFA(meilleur.recettes)}{" "}
+                  <span className="text-xs font-normal text-slate-400">le {meilleur.label}</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-slate-500">Dépense la plus lourde</dt>
+            <dd className="font-medium tabular-nums">
+              {plusLourd ? (
+                <>
+                  {formatFCFA(plusLourd.depenses)}{" "}
+                  <span className="text-xs font-normal text-slate-400">le {plusLourd.label}</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-slate-500">Journées sans recette</dt>
+            <dd className="font-medium tabular-nums">
+              {creuses} <span className="text-xs font-normal text-slate-400">sur {data.joursDansLeMois}</span>
+            </dd>
+          </div>
+        </dl>
+        {/* Un mois peut être bon en moyenne et n'avoir tenu que sur quelques
+            journées : c'est ce que la moyenne seule ne dit jamais. */}
+        {creuses > 0 && (
+          <p className="mt-3 text-xs text-slate-400">
+            Les moyennes ci-dessus sont calculées sur les {data.joursDansLeMois} jours du mois,
+            journées creuses comprises.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function MoisDashboard({ data }: { data: MoisComptable }) {
-  const verdict = verdictDuMois(data);
+  const verdict = data.clos ? verdictMoisClos(data) : verdictDuMois(data);
   const n = NIVEAUX[verdict.niveau];
   const serieVide = data.serie.every((j) => j.recettes === 0 && j.depenses === 0);
 
   function exportCsv() {
-    downloadCsv(`mois_${data.debut.toISOString().slice(0, 7)}.csv`, [
+    downloadCsv(`mois_${data.cle}.csv`, [
       ["Jour", "Recettes", "Dépenses", "Résultat", "Recettes cumulées", "Dépenses cumulées", "Résultat cumulé"],
       ...data.serie.map((j) => [
         j.label,
@@ -410,17 +501,22 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
           label="Résultat"
           value={formatFCFA(data.resultat)}
           tone={data.resultat >= 0 ? "bon" : "critique"}
-          hint={`${data.joursEcoules} jour(s) sur ${data.joursDansLeMois}`}
+          hint={
+            data.clos
+              ? `Sur les ${data.joursDansLeMois} jours du mois`
+              : `${data.joursEcoules} jour(s) sur ${data.joursDansLeMois}`
+          }
         />
         {/* Tant que la projection n'est pas fiable, la tuile ne porte pas de
             palier : afficher « À perte » au-dessus d'un verdict qui dit de ne
-            rien changer donnerait deux messages contraires. */}
+            rien changer donnerait deux messages contraires. Sur un mois clos le
+            palier est un fait, plus une prévision : il se porte toujours. */}
         <StatTile
           label="Taux de dépenses"
           value={data.taux == null ? "—" : `${data.taux.toFixed(0)} %`}
-          tone={data.projetable ? TONE_PAR_NIVEAU[data.niveau] : "neutre"}
+          tone={data.clos || data.projetable ? TONE_PAR_NIVEAU[data.niveau] : "neutre"}
           hint={
-            data.projetable
+            data.clos || data.projetable
               ? NIVEAUX[data.niveau].libelle
               : `Sur ${data.joursEcoules} jour(s) — trop tôt pour conclure`
           }
@@ -437,7 +533,7 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
           </span>
         </div>
         <p className={`mt-2 text-sm ${n.encre}`}>{verdict.message}</p>
-        <p className={`mt-2 text-sm font-medium ${n.encre}`}>{verdict.conseil}</p>
+        {verdict.conseil && <p className={`mt-2 text-sm font-medium ${n.encre}`}>{verdict.conseil}</p>}
       </div>
 
       {data.tresorerie && (
@@ -446,6 +542,7 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
           recettes={data.recettes}
           resultat={data.resultat}
           joursDansLeMois={data.joursDansLeMois}
+          clos={data.clos}
         />
       )}
 
@@ -453,20 +550,28 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="font-semibold">Taux de dépenses</h3>
           <p className="mt-0.5 mb-4 text-xs text-slate-400">
-            Constaté sur {data.joursEcoules} jour(s) de {data.moisLabel}
+            {data.clos
+              ? `Sur les ${data.joursDansLeMois} jours de ${data.moisLabel}`
+              : `Constaté sur ${data.joursEcoules} jour(s) de ${data.moisLabel}`}
           </p>
-          <JaugeTaux taux={data.taux} niveau={data.niveau} projetable={data.projetable} />
+          {/* Sur un mois clos, le taux n'est plus une tendance à confirmer : la
+              jauge s'affiche à son palier, sans réserve. */}
+          <JaugeTaux taux={data.taux} niveau={data.niveau} conclusif={data.clos || data.projetable} />
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 lg:col-span-2">
-          <h3 className="font-semibold">Fin de mois</h3>
+          <h3 className="font-semibold">{data.clos ? "Le mois en résumé" : "Fin de mois"}</h3>
           <p className="mt-0.5 mb-4 text-xs text-slate-400">
-            {data.projetable
-              ? `Projection au rythme des ${data.joursEcoules} premiers jours`
-              : `Disponible à partir du ${data.joursAvantProjection}ᵉ jour du mois`}
+            {data.clos
+              ? "Le régime ordinaire du mois, et de combien il a varié"
+              : data.projetable
+                ? `Projection au rythme des ${data.joursEcoules} premiers jours`
+                : `Disponible à partir du ${data.joursAvantProjection}ᵉ jour du mois`}
           </p>
 
-          {data.projetable ? (
+          {data.clos ? (
+            <ResumeMoisClos data={data} />
+          ) : data.projetable ? (
             <>
               <dl className="grid gap-3 sm:grid-cols-3">
                 <div>
@@ -662,9 +767,13 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="font-semibold">D&apos;où viennent les dépenses</h3>
+            <h3 className="font-semibold">
+              {data.clos ? "D'où venaient les dépenses" : "D'où viennent les dépenses"}
+            </h3>
             <p className="mt-0.5 text-xs text-slate-400">
-              Ce qui pèse le plus est ce sur quoi une correction agit le plus
+              {data.clos
+                ? "Ce qui a le plus pesé, et donc où porter l'effort le mois suivant"
+                : "Ce qui pèse le plus est ce sur quoi une correction agit le plus"}
             </p>
           </div>
           {data.serie.length > 0 && (
@@ -676,10 +785,12 @@ export function MoisDashboard({ data }: { data: MoisComptable }) {
 
         {data.achatsStock > 0 && (
           <p className="mb-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-            {formatFCFA(data.achatsStock)} de ces dépenses sont des achats de stock, soit{" "}
-            {((data.achatsStock / data.depenses) * 100).toFixed(0)} % du total. Ce n&apos;est pas une charge
-            consommée : la marchandise est en réserve et servira les jours suivants. Couper là-dessus
-            n&apos;améliore le mois qu&apos;en apparence.
+            {formatFCFA(data.achatsStock)} de ces dépenses {data.clos ? "étaient" : "sont"} des achats
+            de stock, soit {((data.achatsStock / data.depenses) * 100).toFixed(0)} % du total. Ce
+            n&apos;est pas une charge consommée : la marchandise{" "}
+            {data.clos
+              ? "est passée en réserve et a servi les jours suivants — parfois au-delà du mois. Ce poste-là ne se coupe qu'en apparence."
+              : "est en réserve et servira les jours suivants. Couper là-dessus n'améliore le mois qu'en apparence."}
           </p>
         )}
 
